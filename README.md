@@ -32,7 +32,7 @@ The main module takes as input the BAM files, their ID, the coverages previously
       Xome-Blender -l list_file.txt
    The list_file is a tab separated file containing different anlaysis (one per row). Every row must contain all the options above.
   ##### List file example
-      file1,file2	Id1,Id2	cov1,cov2	p1,p2	cov_out
+      **file1,file2	Id1,Id2	cov1,cov2	p1,p2	cov_out**
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	20,80	200
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	30,70	150
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	40,60	100
