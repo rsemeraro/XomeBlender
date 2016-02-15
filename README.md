@@ -15,8 +15,9 @@ the mean coverage and by detecting the germline variants of each input file. The
 You can execute it as a simple bash script by typing ./Xome-Blender, or you can create a symbolic link to the files.
 
 ## Usage  
-First run InXalizer. It requires the BAM files, their ID (to avoid the use of long file names), a reference genome file and a label for the germline variant file. Moreover, it is possible to load a target file, in BED format, to work on exomic data.
-##### Example
+* First run InXalizer. It requires the BAM files, their ID (to avoid the use of long file names), a reference genome file and a label for the germline variant file. Moreover, it is possible to load a target file, in BED format, to work on exomic data. 
+
+* ##### Example
     InXalizer -f file1,file2,file3 -i Id1,Id2,Id3 -l My-favurite-label -r MyRef.fasta -b MyTarget.bed
 *Multiple elements must be comma separated.
 
