@@ -27,7 +27,7 @@ The main module takes as input the BAM files, their ID, the coverages previously
   \*Multiple elements must be comma separated. <br />
   \**The order of samples must be respected in each option!
   
-  Alternatively, it can be run in **automated mode** by using the --list \(-l) option. The activation of this parameter requires a list file, by assigning this it's possible to run multiple consecutive analyses.
+  Alternatively, it can be run in **automated mode** by using the ```--list (-l)``` option. The activation of this parameter requires a list file, by assigning this it's possible to run multiple consecutive analyses.
 
       Xome-Blender -l list_file.txt
    The list_file is a tab separated file containing different anlayses (one per row). Each row must contain all the options above.
