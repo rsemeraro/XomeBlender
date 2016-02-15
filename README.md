@@ -25,5 +25,6 @@ The main module takes as input the BAM files, their ID, the coverages previously
 
         Xome-Blender -f file1,file2,file3 -i Id1,Id2,Id3 -c 127,138,90 -p 30,40,30 -tc 130 -v My-favurite-label.vcf
   \*Multiple elements must be comma separated. <br />
-  \**The order of samples must be respected in each option! <br />
-  Alternatively, it can be run in **automated mode** by using the -l option. 
+  \**The order of samples must be respected in each option!
+  
+  Alternatively, it can be run in **automated mode** by using the --list \(-l) option. The activation of this parameter requires a list file, by assigning this it's possible to run multiple consecutive analyses.
