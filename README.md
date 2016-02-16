@@ -36,3 +36,7 @@ The main module takes as input the BAM files, their ID, the coverages previously
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	30,70	150	My_Favorite_label_2.vcf
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	40,60	100	My_Favorite_label_3.vcf
       NA18501.bam,NA12889.bam	NA18501,NA12889	145,193	50,50	180	My_Favorite_label_4.vcf 
+
+## Contacts
+
+This program has been developed by Roberto Semeraro, Department of Experimental and Clinical Medicine, University of Florence
