@@ -1,7 +1,6 @@
 # Xome-Blender
 Xome-Blender is a collection of bash and R scripts based on SAMtools and GATK functions, useful to generate synthetic cancer genomes with different contamination level and intra-tumor heterogeneity and devoid of any synthetic element.
-It is composed of two modules: InXalizer and Xome-Blender. The first prepare the data for the second module by calculating
-the mean coverage and by detecting the germline variants of each input file. The second is main module that takes as input the sequencing data of two or more samples in BAM format and generates mixed samples with user-defined proportions and coverages.
+It is composed of two modules: InXalizer and Xome-Blender. The first module calculates the mean coverage and detects the germline variants of each input BAM file, while the second module generates mixed samples with user-defined proportions and coverages.
 ###### Supported on Linux and Mac OS X.
 
 ## Requirements 
