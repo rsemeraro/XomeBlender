@@ -19,6 +19,7 @@
 #														   #				
 ############################################################
 
+
 ######################
 #                    #
 #  Define functions  #
@@ -29,6 +30,16 @@ function display_usage()
 {
 	COLUMNS=$(tput cols)
 	printf "%*s\n" $(($COLUMNS/2)) "~~~~~~~~~~~~~~~~~~";printf "%*s\n" $(($COLUMNS/2)) "|                |";printf "%*s\n" $(($COLUMNS/2)) "|  XOME-BLENDER  |";printf "%*s\n" $(($COLUMNS/2)) "|                |";printf "%*s\n" $(($COLUMNS/2)) "~~~~~~~~~~~~~~~~~~";printf "%*s\n" $((($COLUMNS/2)+29)) "____________________________________________________________________________";printf "%*s\n" $((($COLUMNS/2)+29)) "Xome-Blender is a tool for the generation of .bam files made up of different";printf "%*s\n" $((($COLUMNS/2)+29)) "samples. For example, you can simulate the subclonal architecture of tumoral";printf "%*s\n" $((($COLUMNS/2)-20)) "cells or the contamination."; printf "%*s\n" $((($COLUMNS/2)+29)) "----------------------------------------------------------------------------"; printf "%*s\n" $((($COLUMNS/2)+22)) "Usage: $0 [-f file1,file2,file3] [-i id1,id2,id3]"; printf "%*s\n" $((($COLUMNS/2)+29)) "____________________________________________________________________________"; printf '\e[1;39m%*s\n\e[m' $((($COLUMNS/2)-4)) "Arguments:";printf "%*s" $((($COLUMNS/3)+3)) "-f,--files"; printf "%*s\n" $((($COLUMNS/3)-13)) "Input files comma separated";printf "%*s" $((($COLUMNS/3))) "-i,--id"; printf "%*s\n" $((($COLUMNS/3)-10)) "Samples ID's; same order of files";printf "%*s" $((($COLUMNS/3)+7)) "-c,--coverages"; printf "%*s\n" $((($COLUMNS/3)-17)) "The native coverage of each bam";printf "%*s" $((($COLUMNS/3)+9)) "-p,--percentages"; printf "%*s\n" $((($COLUMNS/3)-19)) "The desidered percentage of each sample";printf "%*s" $((($COLUMNS/3)+12)) "-tc,--totalcoverage"; printf "%*s\n" $((($COLUMNS/3)-22)) "The desidered coverage for the output bam";printf "%*s" $((($COLUMNS/3)+6)) "-v,--variants"; printf "%*s\n" $((($COLUMNS/3)-16)) "The variants file generated with InXalizer";printf "%*s" $((($COLUMNS/3)+2)) "-l,--list"; printf "%*s\n" $((($COLUMNS/3)-12)) "Automated Mode: Get a tab separated file" ;printf '\e[8;39m%*s\e[m' $((($COLUMNS/3)+2)) "-l,--list";printf "%*s\n" $((($COLUMNS/3)-11)) "containing different anlaysis. Every row "; printf '\e[8;39m%*s\e[m' $((($COLUMNS/3)+2)) "-l,--list";printf "%*s\n" $((($COLUMNS/3)-12)) "must contain all the options above";printf "%*s" $((($COLUMNS/3)+4)) "-o,--output"; printf "%*s\n" $((($COLUMNS/3)-14)) "Output directory. If omitted, generates a";printf '\e[8;39m%*s\e[m' $((($COLUMNS/3)+4)) "-o,--output"; printf "%*s\n" $((($COLUMNS/3)-14)) "results directory in the current position"; printf "%*s\n" $((($COLUMNS/2)+29)) "____________________________________________________________________________"; printf "%*s\n" $((($COLUMNS/2)+20)) "NB: The order of samples must be respected in each option!"; printf "%*s\n" $((($COLUMNS/2)+29)) "----------------------------------------------------------------------------"; printf "%*s\n" $((($COLUMNS/2)+29)) "Xome-Blender. Written by Roberto Semeraro, Department of Clinical and Speri-"; printf "%*s\n" $((($COLUMNS/2)+29)) "mental Medicine, University of Florence. For bug reports or suggestion write"; printf "%*s\n" $((($COLUMNS/2)-19)) "to roberto.semeraro@unifi.it"
+}
+
+function subsampling()
+{
+	New_percentage=$(echo $(printf "%.0f\n" $(perl -E "say ${TOTALCOVERAGE}/${COVERAGE[$e]}*${PERCENTAGE[$e]}")))
+		if [[ ${#New_percentage} == 1 ]]; then
+			samtools view -s $(( ( RANDOM % 100 )  + 1 )).0$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam"
+		else
+			samtools view -s $(( ( RANDOM % 100 )  + 1 )).$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam"
+		fi
 }
 
 function MultipleMixing()
@@ -92,14 +103,15 @@ function MultipleMixing()
 	fi
 
 	### calculate percentages ###
+	
+	Flag=0
 
 	for e in $(seq 0 $End)
 	do
-		New_percentage=$(echo $(printf "%.0f\n" $(perl -E "say ${TOTALCOVERAGE}/${COVERAGE[$e]}*${PERCENTAGE[$e]}")))
-		if [[ ${#New_percentage} == 1 ]]; then
-			samtools view -s $(( ( RANDOM % 100 )  + 1 )).0$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam"
-		else
-			samtools view -s $(( ( RANDOM % 100 )  + 1 )).$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam"
+		Flag=$(($Flag+1))
+		subsampling &
+		if [[ "$Flag" -eq ${THREADS} ]]; then
+			wait
 		fi
 	done
 
@@ -230,6 +242,10 @@ do
 	VARIANTS="$1"
 	shift
 	;;
+	-t|--threads)
+	THREADS="$1"
+	shift
+	;;
 	-o|--output)
 	OUTPUT="$1"
 	shift
@@ -241,16 +257,24 @@ do
 	esac
 done
 
+### Threads setting ###
+
+if [[ -z ${THREADS} ]] ; then
+	THREADS=1
+elif [[ ${THREADS} =~ [[:alpha:]] || ${THREADS} -lt 0 ]] ; then
+	echo "Number of threads it's not an integer!" && exit
+fi
+
 FilesFolder=`( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )`
 
 if [[ -z ${LIST} ]] ; then
 	COLUMNS=$(tput cols)
-	printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) "##########################"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " # Multiple Contamination #"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " ##########################"
+	printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) "#################"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " # Contamination #"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " #################"	
 	echo -e '\e[37m ___________\n|           |\n| User Mode |\n|___________|\n\e[0m'
 	MultipleMixing # Start analysis
 else
 	COLUMNS=$(tput cols)
-	printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) "##########################"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " # Multiple Contamination #"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " ##########################"
+	printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) "#################"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " # Contamination #"; printf '\e[37m%*s\n\e[m' $((($COLUMNS/3)+2)) " #################"
 	echo -e '\e[37m ________________\n|                |\n| Automated Mode |\n|________________|\n\e[0m'
 
 ### generate array ####
