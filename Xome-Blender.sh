@@ -112,6 +112,7 @@ function MultipleMixing()
 		subsampling &
 		if [[ "$Flag" -eq ${THREADS} ]]; then
 			wait
+			Flag=0
 		fi
 	done
 
