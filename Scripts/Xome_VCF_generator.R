@@ -23,9 +23,10 @@ IdVecSplit<-unlist(strsplit(IdVec, "_"))
 IdNumber <- length(IdVecSplit)
 ControlSamp <- IdVecSplit[1]
 
-MatchingTab<-c()
+
 for (s in 2:IdNumber)
 {
+	MatchingTab<-c()
 	TumSamp <- IdVecSplit[s]
 	ControlInGold <- match(ControlSamp, HeaderSplit)
 	TumInGold <- match(TumSamp, HeaderSplit)
