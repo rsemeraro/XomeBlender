@@ -22,14 +22,3 @@ all: src/inx_counter.cc src/xome_counter.cc
 	$(VCFTOOLS_CHECK)	
 clean: 
 	$(RM) alt_counter
-
-
-
-
-
-
-
-
-
-
-
