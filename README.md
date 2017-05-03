@@ -60,9 +60,9 @@ Examples:
 
         Xome-Blender -f Control.bam,Subclone1.bam,Subclone2.bam -la my_label -sc 127 -p 30,40,30 -fc 110 -v Subclone1.vcf,Subclone2.vcf -cnv my_label_CNV.txt
         
-######      \*Multiple elements must be comma separated. <br />
+    ######  \*Multiple elements must be comma separated. <br />
   
-  Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)``` option. The activation of this parameter requires a list file, containing the info to run multiple consecutive analyses.
+Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)``` option. The activation of this parameter requires a list file, containing the info to run multiple consecutive analyses.
 
       Xome-Blender -l list_file.txt
    The list_file is a tab separated file containing different anlayses (one per row). Each row must contain all the parameters above.
