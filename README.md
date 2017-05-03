@@ -15,7 +15,6 @@ The second module generates the synthetic heterogeneous sample.
 * ### Clone the Xome-Blender repository
     
         git clone git://github.com/rsemeraro/Xome-Blender.git
-    
 * ### Compile
     The project can be compiled by calling make in the top-level directory:    
 
