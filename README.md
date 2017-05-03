@@ -14,13 +14,13 @@ The second module generates the synthetic heterogeneous sample.
 
 ### Clone the Xome-Blender repository
     
-    git clone git://github.com/rsemeraro/Xome-Blender.git
+        git clone git://github.com/rsemeraro/Xome-Blender.git
     
 ### Compile
 
 The project can be compiled by calling make in the top-level directory:    
     
-    make
+        make
     
    ###### Check the deps.txt file after make. If any link to a dependency is wrong, substitute it with the right one.
 ## Usage
