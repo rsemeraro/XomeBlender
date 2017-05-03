@@ -43,7 +43,7 @@ Examples:
 
         InXalizer -f file.bam -l my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -c 3,1000000
 
-InXalizer can be run to generate CNV files only, by using the *"CNV list"*  function, invoked as ```-cl```, and a reference sequence.
+InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-cl```, and a reference sequence.
 
         InXalizer -r ref.fa -cl cnv_list.txt
         
