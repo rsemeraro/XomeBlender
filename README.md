@@ -67,7 +67,7 @@ Examples:
 Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)``` option. The activation of this parameter requires a list file, containing the info to run multiple consecutive analyses.
 
       Xome-Blender -l list_file.txt
-   The list_file is a tab separated file containing different anlayses (one per row). Each row must contain all the parameters above.
+   The list_file is a tab separated file containing different anlayses (one per line). Each row must contain all the parameters above.
   ##### List_file example:
       NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	20,80   120 -v Subclone1.vcf
       NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	30,70	90  -v Subclone1.vcf
