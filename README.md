@@ -12,17 +12,16 @@ The second module generates the synthetic heterogeneous sample.
 
 ## Installation
 
-### Clone the Xome-Blender repository
+* ### Clone the Xome-Blender repository
     
         git clone git://github.com/rsemeraro/Xome-Blender.git
-    
-### Compile
+    
+* ### Compile
+    The project can be compiled by calling make in the top-level directory:    
 
-The project can be compiled by calling make in the top-level directory:    
-    
         make
-    
-   ###### Check the deps.txt file after make. If any link to a dependency is wrong, substitute it with the right one.
+
+    ###### Check the deps.txt file after make. If any link to a dependency is wrong, substitute it with the right one.
 ## Usage
 First run InXalizer. It requires a BAM file, a label for it and a reference genome. By means of four parameters it is possible to tune the initialization process: 
  1. Subclone number = the number of subclones that will compose the final product (```-scn```).
