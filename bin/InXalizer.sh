@@ -207,47 +207,47 @@ genovars()
 			FilesToRemove=0
 			IFS=' ' read -ra CountToRemove <<< "$FilesToRemove"
 			$Vars_counter "."${ID[$f]}".varreads" | while read CMD; do arrIN=(${CMD// / }); $Randlines .${ID[$f]}.${arrIN[0]}.refreads ${arrIN[1]} > ${ID[$f]}.${arrIN[0]}.addreads; done
-			while [ ${#CountToRemove[@]} -lt 9 ]; do FilesToRemove=`ls -1 *addreads | tr '\n' ' '` ; IFS=' ' read -ra CountToRemove <<< "$FilesToRemove"; sleep 0.1; done
-			rm $RefToRemove ".temp.read"
-			cat $FilesToRemove > ${ID[$f]}".addreads"
-			cat ${ID[$f]}".addreads" | cut -f 4- > ${ID[$f]}".addreads.sam"
+			while [ ${#CountToRemove[@]} -lt $VarSize ]; do FilesToRemove=`ls -1 *addreads | tr '\n' ' '` ; IFS=' ' read -ra CountToRemove <<< "$FilesToRemove"; sleep 0.1; done
+			rm $RefToRemove ".temp.read" 2> /dev/null
+			cat $FilesToRemove > ${ID[$f]}".addreads" 2> /dev/null
+			cat ${ID[$f]}".addreads" 2> /dev/null | cut -f 4- > ${ID[$f]}".addreads.sam" 2> /dev/null
 			wait
-			rm $FilesToRemove ${ID[$f]}".addreads"
+			rm $FilesToRemove ${ID[$f]}".addreads" 2> /dev/null
 			samtools view -bT $REFERENCE ${ID[$f]}".addreads.sam" > ${ID[$f]}".addreads.bam"
 			samtools view -H $FILE > "header"
 			samtools reheader "header" ${ID[$f]}".addreads.bam" > ${ID[$f]}".addreads.0.bam"
 			samtools sort  -T "/tmp/"${ID[$f]}".aln.sorted" -o ${ID[$f]}".addreads.1.bam" ${ID[$f]}".addreads.0.bam"
 			wait
-			rm "header"
-			rm ${ID[$f]}".varreadsname"
-			rm ${ID[$f]}".addreads.sam"
-			rm ${ID[$f]}".addreads.bam"
-			rm "."${ID[$f]}".varreads"
-			rm ${ID[$f]}".addreads.0.bam"
-		fi
+			rm "header" 2> /dev/null
+			rm ${ID[$f]}".varreadsname" 2> /dev/null
+			rm ${ID[$f]}".addreads.sam" 2> /dev/null
+			rm ${ID[$f]}".addreads.bam" 2> /dev/null
+			rm "."${ID[$f]}".varreads" 2> /dev/null
+			rm ${ID[$f]}".addreads.0.bam" 2> /dev/null
+		fi	
 		while [ $(( $(date +%s) - $(stat -c %Y ${ID[$f]}".1.bam") )) -lt 20 ]; do sleep 1; done
 		samtools merge ${ID[$f]}".bam" ${ID[$f]}".1.bam" ${ID[$f]}".addreads.1.bam"
-		rm ${ID[$f]}".1.bam"
-		rm ${ID[$f]}".addreads.1.bam"
-		rm $VarFile
-		mv ${ID[$f]}".bam" $WorkingFolder
+		rm ${ID[$f]}".1.bam" 2> /dev/null
+		rm ${ID[$f]}".addreads.1.bam" 2> /dev/null
+		rm $VarFile 2> /dev/null
+		mv ${ID[$f]}".bam" $WorkingFolder 2> /dev/null
 		if [[ -e ${ID[$f]}".variants" ]] ; then
 			if [[ ${ID[$f]} != "${LABEL}_Control" ]] ; then
-				mv ${ID[$f]}".variants" $WorkingFolder
-				mv ${ID[$f]}".vcf" $WorkingFolder
+				mv ${ID[$f]}".variants" $WorkingFolder 2> /dev/null
+				mv ${ID[$f]}".vcf" $WorkingFolder 2> /dev/null
 			fi
 		fi
 	elif [[ ! -e ${ID[$f]}".remove" ]]; then
-		cp $FILE .
-		mv *".bam" ${ID[$f]}".bam"
-		mv ${ID[$f]}".variants" $WorkingFolder
-		mv ${ID[$f]}".vcf" $WorkingFolder
+		cp $FILE . 2> /dev/null
+		mv *".bam" ${ID[$f]}".bam" 2> /dev/null
+		mv ${ID[$f]}".variants" $WorkingFolder 2> /dev/null
+		mv ${ID[$f]}".vcf" $WorkingFolder 2> /dev/null
 		wait
-		mv ${ID[$f]}".bam" $WorkingFolder
+		mv ${ID[$f]}".bam" $WorkingFolder 2> /dev/null
 	fi
 	paste <(date +"%d/%m/%y %T") <(echo "PURIFICATION" "SAMPLE="${ID[$f]} "HCCPUS="${HCCPUS} "- finish") -d " " >> $WorkingFolder"/"${LABEL}.log
 	cd $WorkingFolder
-	rmdir $SubDir
+	rmdir $SubDir 2> /dev/null
 }
 
 VariantGeneration(){
@@ -582,15 +582,25 @@ if [[ ! -z ${CNVLIST} ]]; then
 	getArray ${CNVLIST}
 	for e in "${array[@]}"
 	do
-		IDs=`echo $e | awk '{print $1}'`
-		LABEL=`echo $e | awk '{print $2}'`
-		CNV=`echo $e | awk '{print $3}'`
+		#IDs=`echo $e | awk '{print $1}'`
+		LABEL=`echo $e | awk '{print $1}'`
+		CNV=`echo $e | awk '{print $2}'`
                 ### Modifico qui il 15/09/16 ###
-		BED=`echo $e | awk '{print $4}'`
+		BED=`echo $e | awk '{print $3}'`
 		### Label Check ###
 		if [[ ${LABEL} == *"-"* ]]; then
 	  		echo -e '\e[31mHyphens are not allowed for labels. Please, replace it.\e[0m' && exit
 		fi
+		
+		### IDs Gen ###
+		ControlLabel=`echo ${LABEL}"_Control"`
+		SubClLabels=""
+		for i in $(seq 1 $SCN)
+		do
+			SubClLabels=$SubClLabels,${LABEL}"_Subclone_"$i
+		done
+		IDs=$ControlLabel$SubClLabels
+		IFS=',' read -ra ID <<< "$IDs"
 
 		Fields=`echo ${CNV} | tr -cd , | wc -c`
 		if [[ $Fields -ne 1 ]] ; then
@@ -609,7 +619,7 @@ if [[ ! -z ${CNVLIST} ]]; then
 		CNVCounter=$(($CNVCounter+1))
 		echo -e " - "'\e[31mSAMPLES\e[0m' = ${IDs//,/ }
 		echo -e "   - "'\e[30mNumber of events =\e[0m' $Events  "   - "'\e[30mSize of event =\e[0m' $DelSize
-		IDs=`echo CONTROL,$IDs`
+		#IDs=`echo CONTROL,$IDs`
 		intervals & # Function
 		if [[ "$CNVCounter" -eq ${THREADS} ]]; then
 			wait
@@ -653,6 +663,10 @@ fi
 
 if [[ ${VN} =~ [[:alpha:]] || ${VN} -gt 5000 ]]; then
 	echo -e '\e[31mNumber of variants it is not an integer or it is greater than 5000.\e[0m' && exit
+fi
+
+if [[ ${VN} -eq 1 ]]; then
+	VN=2
 fi
 
 if [[ -z ${SA} ]] ; then
