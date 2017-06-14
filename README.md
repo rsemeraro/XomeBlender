@@ -69,10 +69,10 @@ Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)
       Xome-Blender -l list_file.txt
    The list_file is a tab separated file containing different anlayses (one per line). Each row must contain all the parameters above.
   ##### List_file example:
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	20,80   120 -v Subclone1.vcf
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	30,70	90  -v Subclone1.vcf
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	40,60	140 -v Subclone1.vcf
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	50,50	50  -v Subclone1.vcf
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	20,80   120 Subclone1.vcf
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	30,70	90  Subclone1.vcf
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	40,60	140 Subclone1.vcf
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	50,50	50  Subclone1.vcf
 
 ## Contacts
 
