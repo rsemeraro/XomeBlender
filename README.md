@@ -71,8 +71,8 @@ Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)
   ##### List_file example:
       NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	20,80   120 Subclone1.vcf
       NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	30,70	90  Subclone1.vcf
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	40,60	140 Subclone1.vcf
-      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	50,50	50  Subclone1.vcf
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	40,60	140 Subclone1.vcf   my_label_CNV.txt
+      NA18501_Control.bam,NA18501_Subclone1.bam	NA18501	145	50,50	50  Subclone1.vcf   my_label_CNV.txt
 
 ## Contacts
 
