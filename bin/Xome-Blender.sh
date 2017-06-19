@@ -77,6 +77,11 @@ startgraph()
 
 function subsampling()
 {
+	### Edit here 12/06/2017 ###
+	if [[ ! -f ${FILE[$e]} ]]; then
+		echo -e '\e[31mFile '"${FILE[$e]}"' not found!\e[0m' && exit
+	fi
+	############################
 	New_percentage=$(echo $(printf "%.0f\n" $(perl -E "say ${FINALCOVERAGE}/${STARTINGCOVERAGE}*${PERCENTAGE[$e]}")))
 	if [[ $New_percentage -eq 0 ]]; then
 		New_percentage=1
@@ -213,13 +218,19 @@ function AddIntervals()
 	wait
 	
 	VariantFile=`echo $INT_SAMP".vcf"`
-	 
-	VarLength=`$vcftoolsExe --vcf $WorkDir"/$VariantFile" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | grep -v "#" | wc -l`
+	VARFILE=`printf -- '%s\n' "${VARIANT[@]}" | grep "$VariantFile"`
+	### Edit here 12/06/2017 ###
+	if [[ ! -f "$VARFILE" ]]; then
+		echo -e '\e[31mFile '"$VARFILE"' not found!\e[0m' && exit
+	fi	
+	############################
+
+	VarLength=`$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | grep -v "#" | wc -l`
 
 	if [[ $VarLength -gt 0 ]]; then
-		$vcftoolsExe --vcf $WorkDir"/$VariantFile" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk -v pos=$line 'BEGIN {OFS = FS = "\t" } ; {system("echo $XomeCounter " $4" "pos" "$10" "$6" "$1)}' >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" 2>/dev/null; done ; wait ; sort -u "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" > "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".svarreads"
+		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk -v pos=$line 'BEGIN {OFS = FS = "\t" } ; {system("echo $XomeCounter " $4" "pos" "$10" "$6" "$1)}' >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" 2>/dev/null; done ; wait ; sort -u "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" > "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".svarreads"
 	
-		$vcftoolsExe --vcf $WorkDir"/$VariantFile" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk '{print $1}' | sort -u >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".allvarreads"; done
+		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk '{print $1}' | sort -u >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".allvarreads"; done
 
 		rm "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads"
 	
@@ -298,6 +309,8 @@ function MultipleMixing()
 	if [[ -z ${VARIANTS} ]] ; then
 		echo -e '\e[31mNo variants file selected!\e[0m' && exit
 	fi
+
+	BarGrep=""
 
 	IFS=',' read -ra FILE <<< "$FILES"
 	IFS=',' read -ra PERCENTAGE <<< "${PERCENTAGES}"
@@ -393,7 +406,7 @@ function MultipleMixing()
 	MaxSample=${BarGrep%*_*}	
 
 	while [ ! -f $InvisibleDir"/"$BarGrep ]; do sleep 0.1;done	
-	
+
 	while [ $(( $(date +%s) - $(stat -c %Y $InvisibleDir"/"$BarGrep) )) -lt 20 ]; do sleep 1; done
 	if [[ ! -z ${CNVS} ]]; then
 		cd $InvisibleDir
@@ -417,9 +430,15 @@ function MultipleMixing()
 		echo -ne "\r\033[K      [=================>] - Finished." && kill $BarPid 
 		wait $BarPid 2>/dev/null
 	fi
+
 	### Add CNV ###
 
 	if [[ ! -z ${CNVS} ]]; then
+		### Edit here 12/06/2017 ###
+		if [[ ! -f ${CNVS} ]]; then
+			echo -e '\e[31mFile '"${CNVS}"' not found!\e[0m' && exit
+		fi	
+		############################
 		if [[ $THREADS -ge 3 ]]; then
 			CNVTHREADS=$(echo $(perl -E "say (int(${THREADS}/3) )"))
 		else
@@ -631,6 +650,7 @@ function MultipleMixing()
 			cd $InvisibleDir
                         rm *".bam"
                         rm *".bai"
+			rm *"DelFuncEnd"
 			rm "out.log"
 			cd $WorkDir
                 fi
@@ -739,7 +759,6 @@ if [[ -z ${LIST} ]] ; then
 	MultipleMixing # Start analysis
 else
 	COLUMNS=$(tput cols)
-	startgraph
 
 	### generate array ####
 
