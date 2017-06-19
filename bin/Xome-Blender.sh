@@ -273,7 +273,6 @@ function AddIntervals()
 
 function DelGenerator()
 {
-	#INT_SAMP=${ID[$k]}
 	sort -u "."$INT_SAMP".remove" > "."$INT_SAMP".sorted.remove"
 	rm "."$INT_SAMP".remove"
 	INT_FILE=`ls *.bam | grep "$INT_SAMP""_"`
@@ -516,22 +515,13 @@ function MultipleMixing()
 			DelGenerator &
 			if [[ $DelFlag -eq ${THREADS} ]]; then
 				Delcheck=`ls -1 | grep -w $INT_SAMP"DelFuncEnd"`
-				#Pidel=`ps -ef | grep "FilterSamReads I= $INT_FILE FILTER=excludeReadList READ_LIST_FILE= "."$INT_SAMP".sorted.remove" WRITE_READS_FILES=false VALIDATION_STRINGENCY=LENIENT O= $INT_FILE"_2"" | sed '/grep/d' | awk '{print $3}'`
-				#while [[ -z $Pidel ]]; do sleep 0.1; Pidel=`ps -ef | grep "FilterSamReads I= $INT_FILE FILTER=excludeReadList READ_LIST_FILE= "."$INT_SAMP".sorted.remove" WRITE_READS_FILES=false VALIDATION_STRINGENCY=LENIENT O= $INT_FILE"_2"" | sed '/grep/d' | awk '{print $3}'`; done
-				#WaitStrng=$( echo "while [ -e /proc/$Pidel ]; do sleep 0.1; done" )
-				#eval "$WaitStrng"
 				while [[ ! -f $Delcheck ]]; do sleep 0.1; Delcheck=`ls -1 | grep -w $INT_SAMP"DelFuncEnd"`; done
 				DelFlag=0
 			fi
 		done
 		cd $WorkDir
-		#while [ -z $BarGrep2 ]; do
-		#	BarGrep2=`ls -a $InvisibleDir"/""."$MaxSample".sorted.remove" 2>/dev/null | head -n 1`
-		#	sleep  0.1
-		#done
 		DeletingProcesses=`cd $InvisibleDir; ls -1 | grep -c "DelFuncEnd"; cd $WorkDir`
 		while [[ $DeletingProcesses -lt $DeletedSamples ]]; do sleep 0.1; DeletingProcesses=`cd $InvisibleDir; ls -1 | grep -c "DelFuncEnd"; cd $WorkDir`; done
-		#while [ -f $InvisibleDir"/""."$MaxSample".sorted.remove" ]; do sleep 0.1; done
 		echo -ne "\r\033[K      [========>] - Finished." && kill $BarPid2
 		wait $BarPid2 2>/dev/null
 	fi
