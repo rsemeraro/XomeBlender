@@ -77,16 +77,13 @@ startgraph()
 
 function subsampling()
 {
-	### Edit here 12/06/2017 ###
 	if [[ ! -f ${FILE[$e]} ]]; then
 		echo -e '\e[31mFile '"${FILE[$e]}"' not found!\e[0m' && exit
 	fi
-	############################
 	New_percentage=$(echo $(printf "%.0f\n" $(perl -E "say ${FINALCOVERAGE}/${STARTINGCOVERAGE}*${PERCENTAGE[$e]}")))
 	if [[ $New_percentage -eq 0 ]]; then
 		New_percentage=1
 	fi
-	### Edit here 27/03/2017 ###
 	if [[ ! -f "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" ]]; then 
 		if [[ ${#New_percentage} == 1 ]]; then
 			MCSBait=$(echo "samtools view -s $(( ( RANDOM % 100 )  + 1 )).0$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" 2>/dev/null |:")
@@ -219,18 +216,16 @@ function AddIntervals()
 	
 	VariantFile=`echo $INT_SAMP".vcf"`
 	VARFILE=`printf -- '%s\n' "${VARIANT[@]}" | grep "$VariantFile"`
-	### Edit here 12/06/2017 ###
 	if [[ ! -f "$VARFILE" ]]; then
 		echo -e '\e[31mFile '"$VARFILE"' not found!\e[0m' && exit
-	fi	
-	############################
+	fi
 
 	VarLength=`$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | grep -v "#" | wc -l`
 
 	if [[ $VarLength -gt 0 ]]; then
-		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk -v pos=$line 'BEGIN {OFS = FS = "\t" } ; {system("echo $XomeCounter " $4" "pos" "$10" "$6" "$1)}' >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" 2>/dev/null; done ; wait ; sort -u "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" > "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".svarreads"
+		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk -v pos=$line 'BEGIN {OFS = FS = "\t" } ; {system(" '$XomeCounter' "$4" "pos" "$10" "$6" "$1)}' >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" 2>/dev/null; done ; wait ; sort -u "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads" > "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".svarreads" # Extract and sort reads name of reads containing the alternative allele
 	
-		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk '{print $1}' | sort -u >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".allvarreads"; done
+		$vcftoolsExe --vcf "$VARFILE" --chr $INT_CHR --from-bp $INT_START --to-bp $INT_STOP --recode --stdout -c | stdbuf -oL grep -v "#" | stdbuf -oL awk 'BEGIN {FS = "\t"} ; {print $2}' | while IFS= read -r line; do samtools view -h $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" $INT_CHR":"$line"-"$line | samtools fillmd -e - $INT_REF 2>/dev/null | grep -v "^@" | awk '{print $1}' | sort -u >> "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".allvarreads"; done # Extract all reads name
 
 		rm "."$INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".varreads"
 	
@@ -386,7 +381,6 @@ function MultipleMixing()
 		subsampling
 	done
 	
-	
 	GrepSubClonesIndexes=`ls | grep -c "%.bam$"`
 	while [[ $GrepSubClonesIndexes -lt ${#ID[@]} ]]; do
 		cd $InvisibleDir
@@ -433,11 +427,9 @@ function MultipleMixing()
 	### Add CNV ###
 
 	if [[ ! -z ${CNVS} ]]; then
-		### Edit here 12/06/2017 ###
 		if [[ ! -f ${CNVS} ]]; then
 			echo -e '\e[31mFile '"${CNVS}"' not found!\e[0m' && exit
 		fi	
-		############################
 		if [[ $THREADS -ge 3 ]]; then
 			CNVTHREADS=$(echo $(perl -E "say (int(${THREADS}/3) )"))
 		else
@@ -532,57 +524,34 @@ function MultipleMixing()
 	progress_final &
 	BarPid3=$!
 	IDVec=$(echo ${IDs//,/_})
-	PercVec=$(echo ${PERCENTAGES//,/_})		
-	NumberOfFileds=$(samtools view -H "$InvisibleDir/"${ID[0]}"_"${PERCENTAGE[0]}"%.bam" | grep "@RG" | awk 'BEGIN {FS="\t"} { print NF }')
-	SMPositionField=$(samtools view -H "$InvisibleDir/"${ID[0]}"_"${PERCENTAGE[0]}"%.bam" | grep "@RG" | awk 'BEGIN {FS="\t"} { print $0 }'| samtools view -H "$InvisibleDir/"${ID[0]}"_"${PERCENTAGE[0]}"%.bam" | grep "@RG" | awk 'BEGIN {FS="\t"} { print $0 }' | tr $'\t' $'\n' | grep -n "SM:")
-	NOF=($NumberOfFileds)
-	read -a NOF <<< $NumberOfFileds
-	if [[ ${#NOF[@]} -gt 1 ]]; then
-		NumberOfFileds=`echo ${NOF[0]}`
-		SMP=($SMPositionField)
-		read -a SMP <<< $SMPositionField
-		SMPositionField=`echo ${SMP[0]}`
-	fi
-	SMPos=${SMPositionField:0:1}
-	Stop=$(perl -E "say $SMPos-1")
-	Subs=$(perl -E "say $SMPos+1")
-	
+	PercVec=$(echo ${PERCENTAGES//,/_})
 	samtools view -H "$InvisibleDir/"${ID[0]}"_"${PERCENTAGE[0]}"%.bam" | grep "@RG" > "$InvisibleDir/.temp.rg"
-
-	RGedit(){
-		( echo "$e" | cut -f1-$Stop; echo "SM:"$IDVec"_"$PercVec; echo "$e" | cut -f$Subs- ) | tr "\n" "\t"
-	}
-	TRG="$InvisibleDir/.temp.rg"
-	array=()
-	getArray() {
-	i=0
-	while read line
-	do
-	array[i]=$line
-	i=$(($i + 1))
-	done < $1
-	}
-	getArray ${TRG}
-	for e in "${array[@]}"
-	do
-	echo -e `RGedit` | tr " " "\t" >> "$InvisibleDir/.rg.txt"
-	done
-
+	
+	sed -e 's/SM[^[:space:]]*/SM:'"$IDVec"'_'"$PercVec"'/g' "$InvisibleDir/.temp.rg" > "$InvisibleDir/.rg.txt"
+	
 	### merge new files ###
 
 	cd $InvisibleDir
 	rm .temp.rg
-	MergeFiles=$(ls *".bam")
-	samtools merge -h ".rg.txt" -cp  $IDVec"_"$PercVec".unsrt.bam" $MergeFiles
+
+	MergeFiles=$(ls -1 *"%.bam" | wc -l)
+	while [[ $MergeFiles -lt ${#PERCENTAGE[@]} ]]; do sleep 0.1 ; MergeFiles=$(ls -1 *"%.bam"); done
+	
+	ls -1 *.bam > Merge.input
+
+	MergeInputPercs=`grep -c "%" Merge.input`
+	while [[ $MergeInputPercs -lt ${#PERCENTAGE[@]} ]]; do sleep 0.1 ; ls -1 *.bam > Merge.input ; MergeInputPercs=`grep -c "%" Merge.input`; done
+
+	samtools merge -h ".rg.txt" -cp  $IDVec"_"$PercVec".unsrt.bam" -b Merge.input
 
 	### sort final file ###
 
 	samtools sort -T /tmp/$IDVec"_"$PercVec".bam" -o $IDVec"_"$PercVec".bam" $IDVec"_"$PercVec".unsrt.bam" -@ ${THREADS} 2>/dev/null
 
 	rm $IDVec"_"$PercVec".unsrt.bam"
+	rm Merge.input
 
 	samtools index $IDVec"_"$PercVec".bam"
-
 
 	cd $WorkDir
 
