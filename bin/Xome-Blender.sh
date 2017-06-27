@@ -533,9 +533,6 @@ function MultipleMixing()
 
 	cd $InvisibleDir
 	rm .temp.rg
-
-	MergeFiles=$(ls -1 *"%.bam" | wc -l)
-	while [[ $MergeFiles -lt ${#PERCENTAGE[@]} ]]; do sleep 0.1 ; MergeFiles=$(ls -1 *"%.bam"); done
 	
 	ls -1 *.bam > Merge.input
 
