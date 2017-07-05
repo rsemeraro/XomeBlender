@@ -738,6 +738,7 @@ else
 		VARIANTS=`echo $e | awk '{print $6}'`
 		CNVS=`echo $e | awk '{print $7}'`
 		MultipleMixing # Start analysis
+		printf '\e[1;39m%*s\n\e[m' $(($HalfLength+19)) "                                     "
 	done
 fi
 
