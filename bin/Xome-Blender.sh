@@ -742,4 +742,4 @@ else
 	done
 fi
 
-echo -e "\n      "'\e[37mDone\e[0m'
+echo -e "\r      "'\e[37mDone\e[0m'
