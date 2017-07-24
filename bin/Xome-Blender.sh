@@ -84,9 +84,10 @@ function subsampling()
 	if [[ $New_percentage -eq 0 ]]; then
 		New_percentage=1
 	fi
+	paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS SUBSAMPLING -" "SAMPLE="${ID[$e]} "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
 	if [[ ! -f "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" ]]; then 
 		if [[ ${#New_percentage} == 1 ]]; then
-			MCSBait=$(echo "samtools view -s $(( ( RANDOM % 100 )  + 1 )).0$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" 2>/dev/null |:")
+			MCSBait=$(echo 'samtools view -s $(( ( RANDOM % 100 )  + 1 )).0$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" 2>/dev/null |: ; paste -d " " <(date +"%d/%m/%y %T") <(echo SAMTOOLS SUBSAMPLING - SAMPLE=${ID[$e]} - finish) >> $WorkDir/${LABEL}_XB.log')
 			MCBait=$(echo $MCSBait | awk '{split($0,a,/ >/);$0=a[1]}1')
 			eval $MCSBait &
 			if [[ "$Flag" -eq ${THREADS} ]]; then
@@ -98,7 +99,7 @@ function subsampling()
                         	Flag=0
                         fi
 		else
-			MCSBait=$(echo "samtools view -s $(( ( RANDOM % 100 )  + 1 )).$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" 2>/dev/null |:")
+			MCSBait=$(echo 'samtools view -s $(( ( RANDOM % 100 )  + 1 )).$New_percentage -b ${FILE[$e]} > "$InvisibleDir/"${ID[$e]}"_"${PERCENTAGE[$e]}"%.bam" 2>/dev/null |: ; paste -d " " <(date +"%d/%m/%y %T") <(echo SAMTOOLS SUBSAMPLING - SAMPLE=${ID[$e]} - finish) >> $WorkDir/${LABEL}_XB.log')
 			MCBait=$(echo $MCSBait | awk '{split($0,a,/ >/);$0=a[1]}1')
 			eval $MCSBait &
 			if [[ "$Flag" -eq ${THREADS} ]]; then
@@ -107,6 +108,7 @@ function subsampling()
                                 SamWaitStrng=$( echo "while [ -e /proc/$SamPid ]; do sleep 0.1; done" )
                                 eval "$SamWaitStrng"
                                 Flag=0
+                               
                         fi
 		fi
 	fi
@@ -175,6 +177,7 @@ function CNV()
 				echo -e '\e[31mThe bam index file is missing!\e[0m' && exit
 			fi
 			if [[ ! -f $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".sorted.NonEthR.50.bam" ]]; then
+				paste <(date +"%d/%m/%y %T") <(echo "CNV GENERATION -" "SAMPLE="$INT_SAMP "EVENT="$INT_CHR":"$INT_START"-"$INT_STOP "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
 				AddIntervals & # For many samples
 			fi
 		done
@@ -185,6 +188,7 @@ function CNV()
 			echo -e '\e[31mThe bam index file is missing!\e[0m' && exit
 		fi
 		if [[ ! -f $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".sorted.NonEthR.50.bam" ]]; then
+			paste <(date +"%d/%m/%y %T") <(echo "CNV GENERATION -" "SAMPLE="$INT_SAMP "EVENT="$INT_CHR":"$INT_START"-"$INT_STOP "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
 			AddIntervals # For one sample
 		fi
 	fi
@@ -264,6 +268,7 @@ function AddIntervals()
 		rm $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam" # Remove bam region
 		rm $INT_SAMP"."$INT_CHR"."$INT_START"."$INT_STOP".bam.bai"
 	fi
+	paste <(date +"%d/%m/%y %T") <(echo "CNV GENERATION -" "SAMPLE="$INT_SAMP "EVENT="$INT_CHR":"$INT_START"-"$INT_STOP "- finish") -d " " >> $WorkDir"/"${LABEL}_XB.log
 }
 
 function DelGenerator()
@@ -361,6 +366,8 @@ function MultipleMixing()
 
 	cd $WorkDir
 
+	paste <(date +"%d/%m/%y %T") <(echo "========="${LABEL}_$(echo ${PERCENTAGES//,/%_})"%=========") -d " " >> $WorkDir"/"${LABEL}_XB.log
+
 	InvisibleDir=.NewCoverageBam$RANDOM
 
 	if [[ ! -d $InvisibleDir ]]; then
@@ -407,7 +414,9 @@ function MultipleMixing()
 		for i in $IndexingVec
 		do
 			if [[ ! -e $i.bai || $i.bai -ot $i  ]]; then
-				samtools index $i 
+				paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS INDEX -" "SAMPLE="$i "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
+				samtools index $i
+				paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS INDEX -" "SAMPLE="$i "- finish") -d " " >> $WorkDir"/"${LABEL}_XB.log
 			fi
 		done
 		cd $WorkDir
@@ -439,7 +448,8 @@ function MultipleMixing()
 		progress_cnv &
 		BarPid2=$!
 		CNVFlag=0
-		### Deleted sample Number ###
+		paste <(date +"%d/%m/%y %T") <(echo "*************START CNV GENERATION*************") -d " " >> $WorkDir"/"${LABEL}_XB.log
+		### Deleted sample Number ###        
 		DelOccurences=`grep Del ${CNVS} | cut -f5 | grep -o -n "-" | cut -d : -f 1 | uniq -c | awk '{print $1}' | awk -v idx=1 'NR==1 || $idx>max{max=$idx} END{print max}'`
 		DeletedSamples=$(($DelOccurences+1))
 		array=()
@@ -516,6 +526,7 @@ function MultipleMixing()
 		while [[ $DeletingProcesses -lt $DeletedSamples ]]; do sleep 0.1; DeletingProcesses=`cd $InvisibleDir; ls -1 | grep -c "DelFuncEnd"; cd $WorkDir`; done
 		echo -ne "\r\033[K      [========>] - Finished." && kill $BarPid2
 		wait $BarPid2 2>/dev/null
+		paste <(date +"%d/%m/%y %T") <(echo "*************FINISH CNV GENERATION*************") -d " " >> $WorkDir"/"${LABEL}_XB.log
 	fi
 	
 	### create good read group ###
@@ -539,11 +550,19 @@ function MultipleMixing()
 	MergeInputPercs=`grep -c "%" Merge.input`
 	while [[ $MergeInputPercs -lt ${#PERCENTAGE[@]} ]]; do sleep 0.1 ; ls -1 *.bam > Merge.input ; MergeInputPercs=`grep -c "%" Merge.input`; done
 
+	paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS MERGE -" "SAMPLE="$IDVec"_"$PercVec "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
+	
 	samtools merge -h ".rg.txt" -cp  $IDVec"_"$PercVec".unsrt.bam" -b Merge.input
+
+	paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS MERGE -" "SAMPLE="$IDVec"_"$PercVec "- finish") -d " " >> $WorkDir"/"${LABEL}_XB.log
 
 	### sort final file ###
 
+	paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS SORT -" "SAMPLE="$IDVec"_"$PercVec "- start") -d " " >> $WorkDir"/"${LABEL}_XB.log
+
 	samtools sort -T /tmp/$IDVec"_"$PercVec".bam" -o $IDVec"_"$PercVec".bam" $IDVec"_"$PercVec".unsrt.bam" -@ ${THREADS} 2>/dev/null
+
+	paste <(date +"%d/%m/%y %T") <(echo "SAMTOOLS SORT -" "SAMPLE="$IDVec"_"$PercVec "- finish") -d " " >> $WorkDir"/"${LABEL}_XB.log
 
 	rm $IDVec"_"$PercVec".unsrt.bam"
 	rm Merge.input
@@ -615,6 +634,7 @@ if [ `find $InvisibleDir -prune -empty` ]
 then
 	rm -rf $InvisibleDir
 fi
+paste <(date +"%d/%m/%y %T") <(echo "========="`printf "%0.s=" $(seq 1 $((${#LABEL}+${#PERCENTAGES})))}`"===========") -d " "  >> $WorkDir"/"${LABEL}_XB.log
 echo -ne "\r\033[K      [================>] - Finished." && kill $BarPid3
 wait $BarPid3 2>/dev/null
 }
@@ -713,6 +733,7 @@ dependencies_check
 if [[ -z ${LIST} ]] ; then
 	COLUMNS=$(tput cols)
 	MultipleMixing # Start analysis
+	printf '\e[1;39m%*s\n\e[m' $(($HalfLength+19)) "                                     "
 else
 	COLUMNS=$(tput cols)
 
