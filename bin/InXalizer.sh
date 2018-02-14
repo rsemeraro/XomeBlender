@@ -752,7 +752,7 @@ if [[ $THREADS -lt $COVCPUs ]]; then
 fi
 
 if [[ ! -e "ExcludeList.intervals" ]]; then
-	samtools view -H $FILE | grep SN | awk '{print $2}' | sed -r 's/^.{3}//' | awk '{ if ($0 > 22 && $0 !~ /NC_007605/ && $0 !~ /hs37d5/) print $0}' > ExcludeList.intervals
+	samtools view -H $FILE | grep SN | awk '{print $2}' | sed -r 's/^.{3}//' | awk -v chchek="chr" '{if ($1 ~ /^ *chr/ ) print substr($1,4), chchek; else print $1}' | awk '{ if ($1 > 22 && $1 !~ /NC_007605/ && $1 !~ /hs37d5/) print $0}' | awk '{ if ($2 == "chr") print $2$1; else print $1}' > ExcludeList.intervals
 fi
 
 cov_calc
