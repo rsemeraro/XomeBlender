@@ -1,0 +1,846 @@
+#! /usr/bin/env python
+
+import argparse
+import multiprocessing
+import os
+import re
+import shutil
+import sys
+from random import shuffle, random, choice, sample
+from subprocess import Popen, PIPE
+
+import xomeblender.logging_module_X
+import pysam
+import rpy2.robjects as robjects
+from xomeblender.logging_module_X import log
+
+class Consumer(multiprocessing.Process):
+    def __init__(self, task_queue, result_queue, main='.'):
+        multiprocessing.Process.__init__(self)
+        self.task_queue = task_queue
+        self.result_queue = result_queue
+        self.main = main
+
+    def run(self):
+        proc_name = self.name
+        while True:
+            next_task = self.task_queue.get()
+            if next_task is None:
+                self.task_queue.task_done()
+                break
+            next_task.main = self.main
+            next_task.sub = proc_name
+            answer = next_task()
+            self.task_queue.task_done()
+            self.result_queue.put(answer)
+        return
+
+
+class cov_calc(object):
+    def __init__(self, bamin, wdir, lbl):
+        self.bamin = bamin
+        self.threshold = 1000000
+        self.wdir = wdir
+        self.lbl = lbl
+        self.covfile = os.path.join(wdir, lbl + '.cov')
+
+    def __call__(self):
+        if not os.path.isfile(self.covfile):
+            log.info('Coverage calculation...')
+            filteringdict = {1: 7,
+                             2: 7,
+                             3: 5,
+                             4: 5,
+                             5: 5,
+                             6: 5,
+                             7: 5,
+                             8: 3,
+                             9: 3,
+                             10: 3,
+                             11: 3,
+                             12: 3,
+                             13: 3,
+                             14: 3,
+                             15: 3,
+                             16: 1,
+                             17: 1,
+                             18: 1,
+                             19: 1,
+                             20: 1,
+                             21: 1,
+                             22: 1}
+            chromosmes = range(1, 23)
+            if chromextformat == True:
+                chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
+            Q = multiprocessing.JoinableQueue()
+            R = multiprocessing.Queue()
+            meanlist = []
+            consumers = [Consumer(Q, R)
+                         for ix in xrange(th)]
+            for w in consumers:
+                w.start()
+            if bedfile is None:
+                for _ in chromosmes:
+                    if chromextformat == True:
+                        fs = filteringdict.get(int(_[3:]))
+                    else:
+                        fs = filteringdict.get(int(_))    
+                    limit = ((int(self.threshold) / 22) * fs) / 3
+                    Q.put(few_proc_worker(str(_), fs, limit, self.bamin))
+            else:
+                chr_dict = dict()
+                regs = []
+                bf = open(bedfile, 'r')
+                lines = bf.readlines()
+                for l in lines:
+                    if not l in ['\n', '\r\n']:
+                        contig = l.split('\t')[0]
+                        chr_dict[contig] = chr_dict.get(contig, 0) + 1
+                        regs.append('\t'.join(l.split('\t')[:3]))
+                f_regs = []
+                for c in chr_dict.keys():
+                    chr_res = filter(lambda x: x.startswith(str(c)), regs)
+                    if len(chr_res) > 1000:
+                        div = len(chr_res) / 1000.
+                        f_regs.extend(
+                            map(lambda x: chr_res[x], sample(xrange(len(chr_res)), int(round(len(chr_res) / float(div))))))
+                    else:
+                        f_regs.extend(chr_res)
+                shuffle(f_regs)
+                for l in f_regs:
+                    cr, st, ed = l.split('\t')    
+                    if cr in map(str,range(1, 23)) + map(lambda x: 'chr' + str(x), range(1, 23)):
+                        if chromextformat == True:
+                            fs = filteringdict.get(int(cr[3:]))
+                        else:
+                            fs = filteringdict.get(int(cr))    
+                        chr_regions = chr_dict.get(str(cr))
+                        limit = int(round(((int(self.threshold) / 22.) * fs) / chr_regions))
+                        Q.put(few_proc_worker_bed(str(cr), st, ed, fs, limit, self.bamin))
+            for ix in xrange(th):
+                Q.put(None)
+            Q.join()
+            while not Q.empty():
+                Q.get()
+            for r in xrange(R.qsize()):
+                result = R.get()
+                meanlist.append(result)
+            out_coverage = int(round(float(sum(meanlist)) / float(len(meanlist))))
+            cfile = open(self.covfile, 'w')
+            cfile.write(str(out_coverage) + '\n')
+            cfile.close()
+
+
+class few_proc_worker(cov_calc):
+    def __init__(self, achr, filterlevel, stp, bamin):
+        self.bamin = bamin
+        self.achr = achr
+        self.filterlevel = filterlevel
+        self.stp = stp
+
+    def __call__(self):
+        baminputopen = pysam.AlignmentFile(self.bamin, "rb") #### ASSICURARSI CHE IL BAM ABBIA INDICE! EXCEPTION!
+        n = 0
+        m = 0
+        for pileup in baminputopen.pileup(self.achr, truncate=True):
+            prob = random()
+            if prob <= self.filterlevel / 1000. and m <= self.stp:
+                n += int(pileup.n)
+                m += 1
+                log.debug('[cov_calc] - sampled position is on %s at pos %s and the coverage is %s' % (
+                    self.achr, pileup.pos, pileup.n))
+            elif prob > self.filterlevel / 1000. and m <= self.stp:
+                pass
+            else:
+                break
+        baminputopen.close()
+        out_val = 0
+        if n is not 0 and m is not 0:
+            out_val = int(round(float(n) / float(m)))
+        return out_val
+
+
+class few_proc_worker_bed(cov_calc):
+    def __init__(self, achr, sttp, endp, filterlevel, stp, bamin):
+        self.bamin = bamin
+        self.achr = achr
+        self.filterlevel = filterlevel
+        self.stp = stp
+        self.sttp = sttp
+        self.endp = endp
+
+    def __call__(self):
+        baminputopen = pysam.AlignmentFile(self.bamin, "rb") #### ASSICURARSI CHE IL BAM ABBIA INDICE! EXCEPTION!
+        n = 0
+        m = 0
+        for pileup in baminputopen.pileup(self.achr, int(self.sttp), int(self.endp) + 1, truncate=True):
+            prob = random()
+            if prob <= self.filterlevel / 100. and m <= self.stp:
+                n += int(pileup.n)
+                m += 1
+                log.debug('[cov_calc] - sampled position is on %s at pos %s and the coverage is %s' % (
+                    self.achr, pileup.pos, pileup.n))
+            elif prob > self.filterlevel / 100. and m <= self.stp:
+                pass
+            else:
+                log.debug('[cov_calc] - closed comunication for region %s:%s-%s' % (
+                    self.achr, str(self.sttp), str(int(self.endp) + 1)))
+                break
+        baminputopen.close()
+        out_val = 0
+        if n is not 0 and m is not 0:
+            out_val = int(round(float(n) / float(m)))
+        return out_val
+
+
+class var_call(object):
+    def __init__(self, achr):
+        self.achr = achr
+
+    def __call__(self):
+        outputvcffile = '_'.join([prefix, str(self.achr) + '.tmp.vcf'])
+        log.debug('[var_call] - calling variants for sample %s on %s' % (prefix, str(self.achr)))
+        pilelist = ['bcftools', 'mpileup', '-r', str(self.achr), '-f', ref, baminput]
+        if bedfile is not None:
+            pilelist = ['bcftools', 'mpileup', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]
+        with open(os.devnull, 'w') as devnull:
+            pileupline = Popen(pilelist, stdout=PIPE, stderr=devnull)
+            calline = Popen(['bcftools', 'call', '-mv', '-Ov'], stdin=pileupline.stdout, stdout=PIPE, stderr=devnull)
+            filterline = Popen(['bcftools', 'filter', '-e', '%s' % 'FMT/GT="1/1" || FMT/GT="1/0"', '-o', outputvcffile], stdin=calline.stdout, stdout=PIPE, stderr=devnull).wait()
+        log.debug('[var_call] - finished variants calling for sample %s on %s' % (prefix, str(self.achr)))    
+
+
+class subsamp(object):
+    def __init__(self, samplingdata):
+        self.samplingdata = samplingdata
+
+    def __call__(self):
+        if len(self.samplingdata) > 3:
+            outputfile, nodelfile, sampfile, tmpbed, chrome = self.samplingdata
+            if not os.path.isfile(outputfile):
+                log.debug("[subsamp] - Start creation of sample %s..." % outputfile)
+                log.debug('[subsamp] - samtools view -hb -o %s %s -U %s -L %s %s' % (
+                    outputfile, sampfile, nodelfile, tmpbed, chrome))
+                pysam.view('-hb', '-o%s' % outputfile, sampfile, '-U%s' % nodelfile, '-L%s' % tmpbed, chrome,
+                           catch_stdout=False)
+                log.debug('[subsamp] - samtools index %s' % outputfile)
+                pysam.index(outputfile, catch_stdout=False)
+                log.debug("[subsamp] - Finish creation of sample file %s..." % outputfile)
+        else:
+            outputfile, sampfile, chrome = self.samplingdata
+            if not os.path.isfile(outputfile):
+                log.debug("[subsamp] - Start creation of sample %s..." % outputfile)
+                log.debug('[subsamp] - samtools view -hb -o %s %s %s' % (outputfile, sampfile, chrome))
+                pysam.view('-hb', '-o%s' % outputfile, sampfile, chrome, catch_stdout=False)
+                log.debug("[subsamp] - Finish creation of sample file %s..." % outputfile)
+        return outputfile
+
+
+class read_inverter(object):
+    def __init__(self, samregline):
+        self.samregline = samregline
+
+    def __call__(self):
+        inputfile, region = self.samregline
+        log.debug('[read_inverter] - Inversion of event in position %s for sample %s...' % (region, inputfile))
+        etheroreads = []
+        homoreads = []
+        bamfile = pysam.AlignmentFile(inputfile, "rb")
+        for read in bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1].split('-')[0])),
+                                  int(str(region.split(':')[1].split('-')[1])) + 1):
+            aligned_positions = read.get_aligned_pairs(with_seq=True)
+            pos = int(str(region.split(':')[1].split('-')[0])) - 1
+            if pos in zip(*aligned_positions)[1]:
+                try:
+                    idx = list(zip(*aligned_positions)[1]).index(pos)
+                    read_pos, reference_pos, base = aligned_positions[idx]
+                    if base is not None and base in "acgt":
+                        etheroreads.append(read.tostring(bamfile))
+                    elif base is not None and base in "ACTG":
+                        homoreads.append(read.tostring(bamfile))
+                except:
+                    log.warning("[read_inverter] - cannot get infos about reads in position %s for sample %s " % (pos, inputfile))        
+            else:
+                homoreads.append(read.tostring(bamfile))
+        bamfile.close()
+        ntsample = len(etheroreads)
+        homosampledidx = [choice(range(len(homoreads))) for i in range(len(etheroreads))]
+        homosampled = map(lambda x: homoreads[x], homosampledidx)
+        intinfos = homosampled + homoreads
+        sam = '_'.join(os.path.split(inputfile)[1].split('_')[:-2])
+        log.debug(
+            '[read_inverter] - Finished inversion of event in position %s for sample %s. %s variant reads replaced. %s reference reads in place.' % (
+                region, inputfile, ntsample, len(intinfos)))
+        return [sam, intinfos]
+
+
+def samwriter(file_out, template, ev_reads, outlabel):
+    log.debug('[bamwriter] - Event bam generation...')
+    tempfile = pysam.AlignmentFile(template, "rb")
+    head = tempfile.text
+    file = open(file_out, 'w')
+    for hl in head.split('\n'):
+        if hl != '':
+            if hl.startswith('@RG'):
+                fixline = re.sub('SM:(.*?)\t', 'SM:' + outlabel + '\t', hl)
+                file.write(fixline + '\n')
+            else:
+                file.write(hl + '\n')
+    for l in ev_reads:
+        if l != '':
+            file.write(l + '\n')
+    file.close()
+    tempfile.close()
+    outputfilebam = file_out[:-4] + '.bam'
+    outputfilebamsorted = file_out[:-10] + '.bam'
+    pysam.view("-Sb", "-@%s" % str(th), file_out, "-o%s" % outputfilebam, catch_stdout=False)
+    os.remove(file_out)
+    pysam.sort(outputfilebam, "-@%s" % str(th), "-o%s" % outputfilebamsorted, catch_stdout=False)
+    os.remove(outputfilebam)
+    pysam.index(outputfilebamsorted, "-@%s" % str(th), catch_stdout=False)
+    log.debug('[bamwriter] - Event bam ready!')
+
+
+def variant_inverter(ev_list, idir, samkeys):
+    log.info('CNV adding...')
+    homreads = {k: [] for k in map(lambda x: x[:-7], samkeys.split())}
+    Q = multiprocessing.JoinableQueue()
+    R = multiprocessing.Queue()
+    consumers = [Consumer(Q, R)
+                 for ix in xrange(th)]
+    for w in consumers:
+        w.start()
+    for e in ev_list:
+        sampname = '_'.join(e.split('_')[:-2])
+        int_chr = os.path.split(e)[1].split('_')[3]
+        for ls in variantregions.get(str(sampname) + '.remove'):
+            if ls.startswith(int_chr):
+                region = str(int_chr) + ':' + str(ls.split()[1]) + '-' + str(ls.split()[2])
+                samregline = [str(e), str(region)]
+                Q.put(read_inverter(samregline))
+    for ix in xrange(th):
+        Q.put(None)
+    Q.join()
+    while not Q.empty():
+        Q.get()
+    for r in range(R.qsize()):
+        result = R.get()
+        if result is not None:
+            homreads[str(result[0])].extend(result[1])
+    for k, v in homreads.iteritems():
+        fileout = os.path.join(workdir, k + '_event_reads_unsrt.sam')
+        samwriter(fileout, baminput, v, k)
+
+
+def morphological_job_splitter(mainbam, cfiles):
+    global variantregions
+    if type(cfiles) is not list:
+        cfiles = cfiles.split()
+    variantregions = {os.path.join(workdir, k): [] for k in cfiles}
+    for k in variantregions.keys():
+        for line in open(k, 'r').readlines():
+            if line != '':
+                int_chr = line.split()[0]
+                int_start = line.split()[1]
+                ref_base = line.split()[3]
+                alt_base = line.split()[4]
+                base_list = [len(ref_base), len(alt_base)]
+                eventbait = (base_list.index(max(base_list)), len(ref_base) - len(alt_base))
+                elgth = 0
+                if eventbait[1] != 0:
+                    if eventbait[0] == 0:
+                        elgth = (len(ref_base) - 1)
+                truelength = (elgth + int(int_start))
+                region = str(int_chr) + ':' + str(int_start) + '-' + str(truelength)
+                variantregions[str(k)].append(str(int_chr + '\t' + int_start + '\t' + str(truelength)))
+    jobojects = []
+    if any(variantregions.values()) is True:
+        for cnvk, cnvv in variantregions.iteritems():
+            fpath, samp = os.path.split(cnvk)
+            tmpbed = os.path.join(workdir, samp[:-7] + '.bed')
+            with open(tmpbed, 'w') as f:
+                for coords in cnvv:
+                    chrstr = coords.split()[0]
+                    jobline = [os.path.join(workdir, samp[:-7]) + '_' + str(chrstr) + '_eventregions.bam',
+                               os.path.join(workdir, samp[:-7]) + '_' + str(chrstr) + '_noevents.bam', mainbam, tmpbed,
+                               str(chrstr)]
+                    if jobline[1:] not in map(lambda x: x[1:], jobojects):
+                        jobojects.append(jobline)
+                    f.write(coords + '\n')
+            log.debug('[morphological_job_splitter] - Coordinate bed file generation, for sample %s...' % samp)
+    chromosmes = map(str, range(1, 23))
+    if chromextformat == True:
+        chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
+    for kfile, v in variantregions.iteritems():
+        fpath, samplename = os.path.split(kfile)
+        uniquechrs = [e for e in chromosmes if e not in (map(lambda x: str(x.split('\t')[0]), v))]
+        for c in uniquechrs:
+            jobojects.append([os.path.join(workdir, samplename[:-7]) + '_' + str(c) + '.bam', mainbam, str(c)])
+    shuffle(jobojects)
+    return jobojects
+
+
+def morphological_editor(rem_files, analysisdir, labelvec):
+    log.info('Subclone preparation...')
+    eventgenerator = []
+    Q = multiprocessing.JoinableQueue()
+    R = multiprocessing.Queue()
+    jl = morphological_job_splitter(baminput, rem_files)
+    consumers = [Consumer(Q, R)
+                 for ix in xrange(th)]
+    for w in consumers:
+        w.start()
+    for j in jl:
+        Q.put(subsamp(j))
+    for ix in xrange(th):
+        Q.put(None)
+    Q.join()
+    while not Q.empty():
+        Q.get()
+    for r in range(R.qsize()):
+        res = R.get()
+        if res is not None and 'eventregions' in res:
+            eventgenerator.append(res)     
+    return eventgenerator
+
+
+def merger(bampath, samkeys, lastsamp):
+    log.info('Subclone finalization...')
+    if not os.path.exists(out_dir):
+        os.makedirs(os.path.join(workdir, out_dir))
+    for l in map(lambda x: x[:-7], samkeys.split()):
+        tempfile = pysam.AlignmentFile(baminput, "rb")
+        head = tempfile.text
+        rgfile = os.path.join(bampath, (l + '_rg.txt'))
+        file = open(rgfile, 'w')
+        for line in head.split('\n'):
+            if line.startswith('@RG'):
+                fixline = re.sub('SM:(.*?)\t', 'SM:' + l + '\t', line)
+                file.write(fixline + '\n')
+        file.close()
+        tempfile.close()
+        merginglist = [i for i in os.listdir(bampath) if i.endswith('.bam') and i.startswith(l) and 'eventregions' not in i]
+        finalfile = os.path.join(bampath, (l + '.bam'))
+        bam2merge = map(lambda x: os.path.join(bampath, x), merginglist)
+        bamsfile = os.path.join(bampath, l + '_to_merge.txt')
+        file = open(bamsfile, 'w')
+        for line in bam2merge:
+            file.write(line + '\n')
+        file.close()
+        log.debug('[merger] - samtools merge -cp -h%s -b%s %s -@%s' % (rgfile, bamsfile, finalfile, str(th)))
+        pysam.merge("-cp", "-h%s" % rgfile, "-b%s" % bamsfile, finalfile, "-@%s" % str(th), catch_stdout=False)
+        log.debug('[merger] - samtools index %s -@%s' % (finalfile, str(th)))
+        pysam.index(finalfile, "-@%s" % str(th), catch_stdout=False)
+        if not os.path.exists(os.path.join(workdir, out_dir)):
+            os.makedirs(os.path.join(workdir, out_dir))
+        try:
+            shutil.move(finalfile, os.path.join(workdir, out_dir, l + '.bam'))
+        except shutil.Error:
+            log.error("Unable to move %s" % finalfile)
+        try:
+            shutil.move(finalfile + '.bai', os.path.join(workdir, out_dir, l + '.bam.bai'))
+        except shutil.Error:
+            log.error("Unable to move %s" % (finalfile + '.bai'))
+        if os.path.exists(l + '.variants'):
+            try:
+                shutil.move(finalfile[:-4] + '.variants', os.path.join(workdir, out_dir, l + '.variants'))
+            except shutil.Error:
+                log.error("Unable to move %s" % (finalfile[:-4] + '.variants'))
+        if os.path.exists(l + '.vcf'):        
+            try:
+                shutil.move(finalfile[:-4] + '.vcf', os.path.join(workdir, out_dir, l + '.vcf'))
+                shutil.move(finalfile[:-4] + '.vcf.gz', os.path.join(workdir, out_dir, l + '.vcf.gz'))
+                shutil.move(finalfile[:-4] + '.vcf.gz.tbi', os.path.join(workdir, out_dir, l + '.vcf.gz.tbi'))
+            except shutil.Error:
+                log.error("Unable to move %s" % (finalfile[:-4] + '.vcf'))
+        for b in bam2merge:
+            os.remove(b)
+        bam2rm = [os.path.join(bampath, i) for i in os.listdir(bampath) if i.endswith('.bam') and i.startswith(l) and 'noevents' not in i]    
+        os.remove(l + '_event_reads.bam.bai')
+        os.remove(l + '.bed')
+        os.remove(l + '.remove')
+        os.remove(bamsfile)
+        os.remove(rgfile)
+        map(os.remove, bam2rm)
+        map(lambda x:os.remove(x + '.bai'), bam2rm)
+    if len(lastsamp) > 0:    
+        try:
+            shutil.copyfile(baminput, os.path.join(workdir, out_dir, lastsamp + '.bam'))
+            pysam.index(os.path.join(workdir, out_dir, lastsamp + '.bam'), "-@%s" % str(th), catch_stdout=False)
+            log.debug('[merger] - samtools index %s -@%s' % (os.path.join(workdir, out_dir, lastsamp + '.bam'), str(th)))
+        except shutil.Error:
+            log.error("Unable to move %s" % baminput)
+        if os.path.exists(lastsamp + '.variants'):
+            try:
+                shutil.move(lastsamp + '.variants', os.path.join(workdir, out_dir, lastsamp + '.variants'))
+            except shutil.Error:
+                log.error("Unable to move %s" % (lastsamp + '.variants'))
+        if os.path.exists(lastsamp + '.vcf'):        
+            try:
+                shutil.move(lastsamp + '.vcf', os.path.join(workdir, out_dir, lastsamp + '.vcf'))
+                shutil.move(lastsamp + '.vcf.gz', os.path.join(workdir, out_dir, lastsamp + '.vcf.gz'))
+                shutil.move(lastsamp + '.vcf.gz.tbi', os.path.join(workdir, out_dir, lastsamp + '.vcf.gz.tbi'))
+            except shutil.Error:
+                log.error("Unable to move %s" % (lastsamp + '.vcf'))
+    if os.path.exists(prefix + '.vcf'):
+        try:
+            shutil.move(prefix + '.vcf', os.path.join(workdir, out_dir, prefix + '.vcf'))
+            shutil.move(prefix + '.cov', os.path.join(workdir, out_dir, prefix + '.cov'))
+        except shutil.Error:
+            log.error("Unable to move %s" % (prefix + '.vcf'))            
+
+
+def cnv_gen():
+    ev_numb, ev_size = cnvfile
+    log.info('Starting creation of CNV file containing %s events of %s bp, for sample %s' % (
+        str(ev_numb), str(ev_size), prefix))
+    fh = file(ref, 'r')
+    subject = fh.read(100000000)
+    fh.close()
+    Idpattern = '^>[a-zA-Z0-9]+'
+    FileId = re.search(Idpattern, subject).group()
+    ids = [prefix + '_C'] + map(lambda x: prefix + '_S' + str(x), range(1, int(sub_numb + 1)))
+    R_workdir = robjects.Vector(workdir)
+    robjects.r.assign("PathIn", R_workdir)
+    R_prefix = robjects.Vector(prefix)
+    robjects.r.assign("Label", R_prefix)
+    R_event_size = robjects.Vector(ev_size)
+    robjects.r.assign("EventSize", R_event_size)
+    R_ev_numb = robjects.Vector(ev_numb)
+    robjects.r.assign("EventsNumb", R_ev_numb)
+    R_chstyle = robjects.Vector(FileId[1:])
+    robjects.r.assign("ChrStyle", R_chstyle)
+    R_filesfolder = robjects.Vector(filesfolder)
+    robjects.r.assign("FilesFolder", R_filesfolder)
+    R_ids = robjects.Vector(ids)
+    robjects.r.assign("IDs", R_ids)
+    R_ref = robjects.Vector(ref)
+    robjects.r.assign("Ref", R_ref)
+    if bedfile is not None:
+        R_bedfile = robjects.Vector(bedfile)
+        robjects.r.assign("Bed", R_bedfile)
+    else:
+        R_bedfile = robjects.Vector('')
+        robjects.r.assign("Bed", R_bedfile)
+    RDataFile = os.path.join(workdir, ("." + prefix + '.cnv.tmp.RData'))
+    robjects.r(
+        "save(PathIn, Label, EventSize, EventsNumb, ChrStyle, FilesFolder, IDs, Ref, Bed, file='" + RDataFile + "', compress=TRUE)")
+    ig = os.path.join(filesfolder, 'xomeblender/scripts', 'intervals_generator.R')
+    RR = Popen(['Rscript', ig, RDataFile],
+               stdout=PIPE)
+    removefiles = RR.communicate()[0]
+    os.remove(RDataFile)
+    if not os.path.exists(os.path.join(workdir, out_dir)):
+        os.makedirs(os.path.join(workdir, out_dir))
+    try:
+        shutil.move(prefix + '_CNV.txt', os.path.join(workdir, out_dir, prefix + '_CNV.txt'))
+    except shutil.Error:
+        log.error("Unable to move %s" % (prefix + '_CNV.txt'))
+    log.info('Terminating creation of CNV file containing %s events of %s bp, for sample %s' % (
+    str(ev_numb), str(ev_size), prefix))
+
+
+def germ_caller():
+    log.info('Creation of variant file for sample %s...' % prefix)
+    vcf_fusion_file_label = os.path.join(workdir, prefix + '.vcf')
+    if not os.path.isfile(vcf_fusion_file_label):
+        Q = multiprocessing.JoinableQueue()
+        R = multiprocessing.Queue()
+        consumers = [Consumer(Q, R)
+                     for ix in xrange(th)]
+        for w in consumers:
+            w.start()
+        chromosmes = range(1, 23)
+        if chromextformat == True:
+            chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
+        for ch in chromosmes:
+            Q.put(var_call(ch))
+        for ix in xrange(th):
+            Q.put(None)
+        Q.join()
+        while not Q.empty():
+            Q.get()
+        if 'chr' in str(chromosmes[0]):
+            vcffiles = sorted([f for f in os.listdir(os.getcwd()) if f.endswith('tmp.vcf')],key=lambda x: int(x[:-8].split('_')[-1][3:]))
+        else:    
+            vcffiles = sorted([f for f in os.listdir(os.getcwd()) if f.endswith('tmp.vcf')], key=lambda x: int(x[:-8].split('_')[-1]))                 
+        with open(vcf_fusion_file_label, 'w') as vcf_fusion_file:
+            for x, v in enumerate(vcffiles):
+                with open(os.path.join(workdir, v)) as invcf:
+                    for ls in invcf:
+                        if x != 0 and (ls.startswith('##') or ls.startswith('#CHROM')):
+                            pass
+                        else:
+                            vcf_fusion_file.write(ls)
+        for f in vcffiles:
+            os.remove(os.path.join(workdir, f))
+    R_vcf_fusion_file_label = robjects.Vector(vcf_fusion_file_label)
+    robjects.r.assign("FileVCFIn", R_vcf_fusion_file_label)
+    R_prefix = robjects.Vector(prefix)
+    robjects.r.assign("Label", R_prefix)
+    R_architecture = robjects.Vector(architecture)
+    robjects.r.assign("Model", R_architecture)
+    R_var_numb = robjects.Vector(var_numb)
+    robjects.r.assign("TotalMutation", R_var_numb)
+    R_sub_numb = robjects.Vector(sub_numb)
+    robjects.r.assign("NClone", R_sub_numb)
+    R_workdir = robjects.Vector(workdir)
+    robjects.r.assign("Path2VCF", R_workdir)
+    RDataFile = os.path.join(workdir, ("." + prefix + '.tmp.RData'))
+    robjects.r(
+        "save(FileVCFIn, Label, Model, TotalMutation, NClone, Path2VCF, file='" + RDataFile + "', compress=TRUE)")
+    scg = os.path.join(filesfolder, 'xomeblender/scripts', 'sub_clone_generator.R')
+    RR = Popen(['Rscript', scg, RDataFile], stdout=PIPE)
+    removefiles = RR.communicate()[0]
+    log.debug('[germ_caller] - remove files generated: %s' % removefiles.replace('\n', ' '))
+    os.remove(RDataFile)
+    return removefiles
+
+
+def Worker(analysisdir):
+    labels = [prefix + '_C'] + map(lambda x: prefix + '_S' + str(x), range(1, int(sub_numb + 1)))
+    cov_calc(baminput, workdir, prefix)()
+    r_files = germ_caller()
+    var_evs = morphological_editor(r_files, workdir, labels)
+    if var_evs != []:
+        variant_inverter(var_evs, analysisdir, r_files)   
+    lsamp = [x for x in labels if x not in  map(lambda x:x[:-7], r_files.split())]
+    if len(lsamp) > 0:
+        merger(workdir, r_files,  str(lsamp[0]))
+    else:
+        merger(workdir, r_files, lsamp)    
+    if cnvfile is not None:
+        cnv_gen()
+        
+
+def chrcheck(chrfile):
+    bamfile = pysam.AlignmentFile(chrfile, "rb")
+    chrbait = bamfile.header['SQ'][0]['SN']
+    bamfile.close()
+    return str(chrbait)
+
+
+def lineReader(arguments):
+    global list_file
+    list_file = arguments.list[0]
+    ref = arguments.reference
+    th = arguments.threads
+    try:
+        with open(list_file, 'r') as f:
+            for line in f:
+                args = parser.parse_args()
+                if len(line.split('\t')) == 4:
+                    linesplit = line.strip().split('\t')
+                    args.label = [linesplit[0]]
+                    args.cnv = [linesplit[1]]
+                    args.subclone_number = [linesplit[2]]
+                    args.target = [linesplit[3]]
+                    args.ref = ref
+                    args.th = th
+                    alternative_reader(args)
+                else:
+                    linesplit = line.strip().split('\t')
+                    args.label = [linesplit[0]]
+                    args.cnv = [linesplit[1]]
+                    args.subclone_number = [linesplit[2]]
+                    args.ref = ref
+                    args.th = th
+                    alternative_reader(args)
+    except IOError:
+        log.error('Could not read file: %s' % list_file)
+
+
+def alternative_reader(args):
+    global filesfolder
+    global workdir
+    global baminput
+    global ref
+    global prefix
+    global sub_numb
+    global bedfile
+    global cnvfile
+    global out_dir
+    global th
+    workdir = os.getcwd()
+    filesfolder = os.path.abspath(os.path.dirname(sys.argv[0]))
+    ver = args.verbose
+    verbosity(ver)
+    if args.output_dir is not None:
+        out_dir = str(args.output_dir[0])
+    else:     
+        out_dir = 'InXalizer_Results'
+    ref = str(args.reference[0])
+    prefix = str(args.label[0])
+    sub_numb = int(args.subclone_number[0])
+    if '-' in prefix:
+        log.error('Hyphens are not allowed for labels. Please, replace it!')
+        sys.exit(1)
+    th = args.threads
+    if args.target is not None:
+        bedfile = str(args.target[0])
+    else:
+        bedfile = None
+    if args.cnv is not None:
+        cnvfile = map(int, ' '.join(map(str, args.cnv)).split())
+        if (int(cnvfile[0]) * int(cnvfile[1])) > 500000000:
+            log.error('Size of CNV events is too big!')
+            sys.exit(1)
+        cnv_gen()
+    else:
+        log.error('No CNV info found in file %s!' % list_file)
+        sys.exit(1)
+
+
+def main_reader(args):
+    global filesfolder
+    global workdir
+    global baminput
+    global ref
+    global prefix
+    global sub_numb
+    global var_numb
+    global architecture
+    global bedfile
+    global cnvfile
+    global out_dir
+    global th
+    global chromextformat
+    workdir = os.getcwd()
+    filesfolder = os.path.abspath(os.path.dirname(sys.argv[0]))
+    ver = args.verbose
+    verbosity(ver)
+    if args.output_dir is not None:
+        out_dir = str(args.output_dir[0])
+    else:     
+        out_dir = 'InXalizer_Results'
+    baminput = str(args.input[0])
+    ref = str(args.reference[0])
+    prefix = str(args.label[0])
+    if '-' in prefix:
+        log.error('Hyphens are not allowed for labels. Please, replace it!')
+        sys.exit(1)
+    sub_numb = int(args.subclone_number[0])
+    var_numb = int(args.variants_number[0])
+    architecture = args.subclonal_architecture
+    th = args.threads
+    if args.target is not None:
+        bedfile = str(args.target[0])
+    else:
+        bedfile = None
+    if args.cnv is not None:
+        cnvfile = map(int, ' '.join(map(str, args.cnv)).split())
+        if (int(cnvfile[0]) * int(cnvfile[1])) > 500000000:
+            log.error('Size of CNV events is too big!')
+            sys.exit(1)
+    else:
+        cnvfile = None
+    chromextformat = False
+    bamchr = chrcheck(baminput)
+    if 'chr' in str(bamchr):
+        chromextformat = True
+    Worker(workdir)
+
+
+def verbosity(ver):
+    if ver == 0:
+        xomeblender.logging_module_X.log.setLevel(xomeblender.logging_module_X.logging.WARN)
+    elif ver == 1:
+        xomeblender.logging_module_X.log.setLevel(xomeblender.logging_module_X.logging.INFO)
+    elif ver == 2:
+        xomeblender.logging_module_X.log.setLevel(xomeblender.logging_module_X.logging.DEBUG)
+    elif ver == 3:
+        sys.stdout = open(os.devnull, 'w')
+        xomeblender.logging_module_X.log.setLevel(xomeblender.logging_module_X.logging.DEBUG)
+        xomeblender.logging_module_X.ch.setLevel(xomeblender.logging_module_X.logging.DEBUG)
+
+
+######################
+## Argument Parsing ##
+######################
+
+
+parser = argparse.ArgumentParser(add_help=False,
+                                 prog='InXalizer',
+                                 usage='''\r      \n
+                          \033[1m       _           _    _          _                     
+                                | |  _      \ \  / /        | | _   ___   ___  _ _ 
+                                | | | |___   \ \/ /   __ _  | |(_) \  _| / _ \| '_/
+                                | | |  _  \  / /\ \  / _' | | || | _\ \ |  __/| |
+                                |_| |_| |_| /_/  \_\ \__,_| |_||_||____| \___||_| \033[0m
+___________________________________________________________________________________________________________________
+
+                          InXalizer generates the input data for Xome-Blender running.
+\033[1m___________________________________________________________________________________________________________________\033[0m 
+
+    usage: %(prog)s [-i <file.bam>] [-la <label>] [-r <ref.fa>] [-scn 2] [-vn 1000] [-sa linear] [options]
+___________________________________________________________________________________________________________________''',
+                                 epilog='''
+___________________________________________________________________________________________________________________                                 
+Xome-Blender. Written by Roberto Semeraro, Department of Clinical and Sperimental Medicine, University of Florence.
+For bug reports or suggestion write to robe.semeraro@gmail.com''',
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 )
+g = parser.add_argument_group(title='    mandatory arguments',
+                              description='''    -i,   --input                  input file
+    -la,  --label                  prefix for clonefiles
+    -r,   --reference              indexed reference sequence file
+    -scn, --subclone_number        number of tumoral subclones
+    -vn,  --variants_number        number of somatic variants
+    -sa,  --subclonal_architecture subclonal architecture (linear or branched)
+''')
+g.add_argument('-i', '--input', action='store', metavar='',
+               nargs=1, help=argparse.SUPPRESS)
+g.add_argument('-la', '--label', action='store', metavar='',
+               nargs=1, help=argparse.SUPPRESS)
+g.add_argument('-r', '--reference', action='store', metavar='',
+               nargs=1, help=argparse.SUPPRESS)
+g.add_argument('-scn', '--subclone_number', action='store', metavar='', choices=xrange(1, 6),
+               nargs=1, type=int, default=1, help=argparse.SUPPRESS)
+g.add_argument('-vn', '--variants_number', action="store", type=int, choices=xrange(1, 1000),
+               nargs=1, metavar='', default=1, help=argparse.SUPPRESS)
+g.add_argument('-sa', '--subclonal_architecture', action="store", choices=['linear', 'branched'],
+               nargs=1, metavar='', default='linear', help=argparse.SUPPRESS)
+g1 = parser.add_argument_group(title='    alternative usage',
+                               description='''    -l,   --list                   text file containing instructions for multiple CNV file (see README)               
+''')
+g.add_argument('-l', '--list', action='store', metavar='',
+               nargs=1, help=argparse.SUPPRESS)
+f = parser.add_argument_group(title='    options',
+                              description='''    -cnv, --cnv                    generates a CNV file containing random del/dup events [#Events EventSize]
+    -b,   --target                 target file in .bed format (not required)
+    -o,   --output_dir             if omitted, generates a results directory in the current position
+    -t,   --threads_number         number of processing threads [1]
+    -vb,  --verbose                increase verbosity: 0 = only warnings, 1 = info, 2 = debug, 3 = debug 
+                                   on terminal. No number means info. Default is no verbosity       
+    -h,   --help                   show this help message and exit
+''')
+f.add_argument('-cnv', '--cnv', action='store', metavar='', type=int,
+               nargs=2, help=argparse.SUPPRESS)
+f.add_argument('-b', '--target', action='store', metavar='',
+               nargs=1, help=argparse.SUPPRESS)
+f.add_argument('-o', '--output_dir', action="store", nargs=1, metavar='',
+               help=argparse.SUPPRESS)
+f.add_argument('-t', '--threads', action="store", type=int, default=1, metavar='',
+               help=argparse.SUPPRESS)
+f.add_argument('-vb', '--verbose', const=1, default=1, type=int, nargs="?",
+               help=argparse.SUPPRESS, choices=range(0, 4))
+f.add_argument('-h', '--help', action="help",
+               help=argparse.SUPPRESS)
+try:
+    args = parser.parse_args()
+    if args.list is None:
+        if not args.input or not args.reference or not args.label or not args.subclone_number or not args.variants_number or not args.subclonal_architecture:
+            parser.print_help()
+            log.error('Missing mandatory arguments!')
+            sys.exit(1)
+        else:
+            main_reader(args)
+    else:
+        if not args.reference:
+            parser.print_help()
+            log.error('Missing mandatory arguments!')
+            sys.exit(1)
+        else:
+            lineReader(args)
+except IOError as msg:
+    parser.error(str(msg))
