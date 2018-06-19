@@ -55,7 +55,7 @@ The main module takes as input the BAM files produced by InXalizer, the sample's
 Examples:
 * Running Xome-Blender with minimum requirements:
 
-        python xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf,Subclone2.vcf
+        python xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf
 * Running Xome-Blender with CNVs:
 
         python xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf -cnv my_label_CNV.txt
