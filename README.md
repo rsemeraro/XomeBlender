@@ -3,7 +3,8 @@ Xome-Blender is a collection of python and R scripts based on SAMtools functions
 The second module generates the synthetic heterogeneous sample.
 ###### Supported on Linux.
 
-## Requirements 
+## Requirements
+* Python 2.7 (https://www.python.org/downloads/)
 * R (https://www.r-project.org)
 * SAMtools 1.1 or above (http://www.htslib.org/download/)
 
