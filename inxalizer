@@ -690,6 +690,12 @@ def alternative_reader(args):
         log.error('No CNV info found in file %s!' % list_file)
         sys.exit(1)
 
+       
+def refcheck():
+    for r in ['samtools', 'bcftools']:
+        tv = float(check_output([r, '--version']).split()[1])
+        if tv < 1.6:
+            log.error('The version of %s must be 1.6 or above.' % r)
 
 def main_reader(args):
     global filesfolder
@@ -707,6 +713,7 @@ def main_reader(args):
     global chromextformat
     workdir = os.getcwd()
     filesfolder = os.path.abspath(os.path.dirname(sys.argv[0]))
+    refcheck()
     ver = args.verbose
     verbosity(ver)
     if args.output_dir is not None:
