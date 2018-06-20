@@ -543,7 +543,7 @@ def cnv_gen():
 def germ_caller():
     log.info('Creation of variant file for sample %s...' % prefix)
     vcf_fusion_file_label = os.path.join(workdir, prefix + '.vcf')
-    if not os.path.isfile(vcf_fusion_file_label):
+    if not os.path.isfile(vcf_fusion_file_label) or os.path.getsize(vcf_fusion_file_label) == 0:
         Q = multiprocessing.JoinableQueue()
         R = multiprocessing.Queue()
         consumers = [Consumer(Q, R)
