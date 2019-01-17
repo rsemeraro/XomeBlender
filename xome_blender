@@ -93,7 +93,7 @@ class add_intervals(object):
                                     int(str(region.split(':')[1]).split('-')[1])):
                 for read in bamfile.fetch(str(region.split(':')[0]), int(str(rec).split()[1]),
                                           int(str(rec).split()[1]) + 1):
-                    try:                      
+                    if read.query_sequence is not None:                      
                         aligned_positions = read.get_aligned_pairs(with_seq=True)
                         pos = int(str(rec).split()[1]) - 1
                         if pos in zip(*aligned_positions)[1]:
@@ -105,7 +105,7 @@ class add_intervals(object):
                                 homoreads.append(read.tostring(bamfile))
                         else:
                             homoreads.append(read.tostring(bamfile))
-                    except Exception:
+                    else:
                         log.warning("[add_intervals] - cannot get infos about reads in position %s for sample %s " % (str(region.split(':')[1]), varfile))  
                         continue       
         else:

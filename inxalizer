@@ -7,7 +7,7 @@ import re
 import shutil
 import sys
 from random import shuffle, random, choice, sample
-from subprocess import Popen, PIPE
+from subprocess import Popen, PIPE, check_output
 
 import xomeblender.logging_module_X
 import pysam
@@ -248,7 +248,11 @@ class read_inverter(object):
         bamfile = pysam.AlignmentFile(inputfile, "rb")
         for read in bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1].split('-')[0])),
                                   int(str(region.split(':')[1].split('-')[1])) + 1):
-            aligned_positions = read.get_aligned_pairs(with_seq=True)
+            if read.query_sequence is not None:
+                aligned_positions = read.get_aligned_pairs(with_seq=True)
+            else:
+                log.warning("[read_inverter] - no sequence for read %s " % (read.query_name))
+                continue    
             pos = int(str(region.split(':')[1].split('-')[0])) - 1
             if pos in zip(*aligned_positions)[1]:
                 try:
