@@ -200,9 +200,9 @@ class var_call(object):
     def __call__(self):
         outputvcffile = '_'.join([prefix, str(self.achr) + '.tmp.vcf'])
         log.debug('[var_call] - calling variants for sample %s on %s' % (prefix, str(self.achr)))
-        pilelist = ['bcftools', 'mpileup', '-r', str(self.achr), '-f', ref, baminput]
+        pilelist = ['bcftools', 'mpileup', '-B', '-r', str(self.achr), '-f', ref, baminput]
         if bedfile is not None:
-            pilelist = ['bcftools', 'mpileup', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]
+            pilelist = ['bcftools', 'mpileup', '-B', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]
         with open(os.devnull, 'w') as devnull:
             pileupline = Popen(pilelist, stdout=PIPE, stderr=devnull)
             calline = Popen(['bcftools', 'call', '-mv', '-Ov'], stdin=pileupline.stdout, stdout=PIPE, stderr=devnull)
