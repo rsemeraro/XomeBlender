@@ -4,7 +4,6 @@ from random import randint, shuffle
 import os, argparse, sys, re, multiprocessing, shutil
 from subprocess import Popen, PIPE
 import pysam
-import xomeblender.colored_log
 import xomeblender.logging_module
 from xomeblender.logging_module import log
 

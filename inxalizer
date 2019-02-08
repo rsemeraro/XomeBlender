@@ -69,14 +69,14 @@ class cov_calc(object):
                              20: 1,
                              21: 1,
                              22: 1}
-            chromosmes = range(1, 23)
+            chromosmes = list(range(1, 23))
             if chromextformat == True:
-                chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
+                chromosmes = ['chr' + str(x) for x in chromosmes]
             Q = multiprocessing.JoinableQueue()
             R = multiprocessing.Queue()
             meanlist = []
             consumers = [Consumer(Q, R)
-                         for ix in xrange(th)]
+                         for ix in range(th)]
             for w in consumers:
                 w.start()
             if bedfile is None:
@@ -98,18 +98,18 @@ class cov_calc(object):
                         chr_dict[contig] = chr_dict.get(contig, 0) + 1
                         regs.append('\t'.join(l.split('\t')[:3]))
                 f_regs = []
-                for c in chr_dict.keys():
-                    chr_res = filter(lambda x: x.startswith(str(c)), regs)
+                for c in list(chr_dict.keys()):
+                    chr_res = [x for x in regs if x.startswith(str(c))]
                     if len(chr_res) > 1000:
                         div = len(chr_res) / 1000.
                         f_regs.extend(
-                            map(lambda x: chr_res[x], sample(xrange(len(chr_res)), int(round(len(chr_res) / float(div))))))
+                            [chr_res[x] for x in sample(range(len(chr_res)), int(round(len(chr_res) / float(div))))])
                     else:
                         f_regs.extend(chr_res)
                 shuffle(f_regs)
                 for l in f_regs:
                     cr, st, ed = l.split('\t')    
-                    if cr in map(str,range(1, 23)) + map(lambda x: 'chr' + str(x), range(1, 23)):
+                    if cr in list(map(str,list(range(1, 23)))) + ['chr' + str(x) for x in range(1, 23)]:
                         if chromextformat == True:
                             fs = filteringdict.get(int(cr[3:]))
                         else:
@@ -117,12 +117,12 @@ class cov_calc(object):
                         chr_regions = chr_dict.get(str(cr))
                         limit = int(round(((int(self.threshold) / 22.) * fs) / chr_regions))
                         Q.put(few_proc_worker_bed(str(cr), st, ed, fs, limit, self.bamin))
-            for ix in xrange(th):
+            for ix in range(th):
                 Q.put(None)
             Q.join()
             while not Q.empty():
                 Q.get()
-            for r in xrange(R.qsize()):
+            for r in range(R.qsize()):
                 result = R.get()
                 meanlist.append(result)
             out_coverage = int(round(float(sum(meanlist)) / float(len(meanlist))))
@@ -194,19 +194,26 @@ class few_proc_worker_bed(cov_calc):
 
 
 class var_call(object):
-    def __init__(self, achr):
+    def __init__(self, achr, long_flag):
         self.achr = achr
+        self.long_flag = long_flag
 
     def __call__(self):
         outputvcffile = '_'.join([prefix, str(self.achr) + '.tmp.vcf'])
         log.debug('[var_call] - calling variants for sample %s on %s' % (prefix, str(self.achr)))
-        pilelist = ['bcftools', 'mpileup', '-B', '-r', str(self.achr), '-f', ref, baminput]
+        pilelist = ['bcftools', 'mpileup', '-Ou', '-r', str(self.achr), '-f', ref, baminput]
+        Qual_Thr = 25
+        if self.long_flag is True:
+            Qual_Thr = 1
+            pilelist = ['bcftools', 'mpileup', '-BOu', '-r', str(self.achr) + ':60001-70001', '-f', ref, baminput]   
         if bedfile is not None:
-            pilelist = ['bcftools', 'mpileup', '-B', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]
+            pilelist = ['bcftools', 'mpileup', '-Ou', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]
+            if self.long_flag is True:
+                pilelist = ['bcftools', 'mpileup', '-BOu', '-r', str(self.achr), '-f', ref, '-T', bedfile, baminput]       
         with open(os.devnull, 'w') as devnull:
             pileupline = Popen(pilelist, stdout=PIPE, stderr=devnull)
             calline = Popen(['bcftools', 'call', '-mv', '-Ov'], stdin=pileupline.stdout, stdout=PIPE, stderr=devnull)
-            filterline = Popen(['bcftools', 'filter', '-e', '%s' % 'FMT/GT="1/1" || FMT/GT="1/0"', '-o', outputvcffile], stdin=calline.stdout, stdout=PIPE, stderr=devnull).wait()
+            filterline = Popen(['bcftools', 'filter', '-e', '%s' % 'FMT/GT="1/1" || FMT/GT="1/0" || FMT/GT="1/2" || QUAL<%s' % Qual_Thr, '-o', outputvcffile], stdin=calline.stdout, stdout=PIPE, stderr=devnull).wait()
         log.debug('[var_call] - finished variants calling for sample %s on %s' % (prefix, str(self.achr)))    
 
 
@@ -241,7 +248,7 @@ class read_inverter(object):
         self.samregline = samregline
 
     def __call__(self):
-        inputfile, region = self.samregline
+        inputfile, region, ev_kind = self.samregline
         log.debug('[read_inverter] - Inversion of event in position %s for sample %s...' % (region, inputfile))
         etheroreads = []
         homoreads = []
@@ -254,22 +261,34 @@ class read_inverter(object):
                 log.warning("[read_inverter] - no sequence for read %s " % (read.query_name))
                 continue    
             pos = int(str(region.split(':')[1].split('-')[0])) - 1
-            if pos in zip(*aligned_positions)[1]:
+            Ins_flag = False
+            if pos in list(zip(*aligned_positions))[1]:
                 try:
                     idx = list(zip(*aligned_positions)[1]).index(pos)
+                    cigarLine=read.cigar
+                    if len(cigarLine) > 1:
+                        listcigar = zip(*cigarLine)[0]
+                        if 2 in listcigar and ev_kind == 'D':
+                            idx=idx+1
+                        elif 1 in listcigar and ev_kind == 'I':
+                            Ins_flag = True
                     read_pos, reference_pos, base = aligned_positions[idx]
-                    if base is not None and base in "acgt":
+                    if Ins_flag == True and base in "acgtACTG" and read_pos is not None:
                         etheroreads.append(read.tostring(bamfile))
-                    elif base is not None and base in "ACTG":
+                    elif Ins_flag == False and base is not None and base in "acgt" and read_pos is not None:
+                        etheroreads.append(read.tostring(bamfile))
+                    elif Ins_flag == False and base is not None and base in "ACTG" and read_pos is not None:
                         homoreads.append(read.tostring(bamfile))
+                    elif Ins_flag == False and base is not None and read_pos is None:
+                        etheroreads.append(read.tostring(bamfile))   
                 except:
                     log.warning("[read_inverter] - cannot get infos about reads in position %s for sample %s " % (pos, inputfile))        
             else:
                 homoreads.append(read.tostring(bamfile))
         bamfile.close()
         ntsample = len(etheroreads)
-        homosampledidx = [choice(range(len(homoreads))) for i in range(len(etheroreads))]
-        homosampled = map(lambda x: homoreads[x], homosampledidx)
+        homosampledidx = [choice(list(range(len(homoreads)))) for i in range(len(etheroreads))]
+        homosampled = [homoreads[x] for x in homosampledidx]
         intinfos = homosampled + homoreads
         sam = '_'.join(os.path.split(inputfile)[1].split('_')[:-2])
         log.debug(
@@ -307,22 +326,23 @@ def samwriter(file_out, template, ev_reads, outlabel):
 
 def variant_inverter(ev_list, idir, samkeys):
     log.info('CNV adding...')
-    homreads = {k: [] for k in map(lambda x: x[:-7], samkeys.split())}
+    homreads = {k: [] for k in [x[:-7] for x in samkeys.split()]}
     Q = multiprocessing.JoinableQueue()
     R = multiprocessing.Queue()
     consumers = [Consumer(Q, R)
-                 for ix in xrange(th)]
+                 for ix in range(th)]
     for w in consumers:
         w.start()
+
     for e in ev_list:
         sampname = '_'.join(e.split('_')[:-2])
-        int_chr = os.path.split(e)[1].split('_')[3]
+        int_chr = os.path.split(e)[1].replace('_eventregions.bam','').split('_')[-1]
         for ls in variantregions.get(str(sampname) + '.remove'):
-            if ls.startswith(int_chr):
+            if ls.split()[0] == int_chr:
                 region = str(int_chr) + ':' + str(ls.split()[1]) + '-' + str(ls.split()[2])
-                samregline = [str(e), str(region)]
+                samregline = [str(e), str(region), str(ls.split()[3])]
                 Q.put(read_inverter(samregline))
-    for ix in xrange(th):
+    for ix in range(th):
         Q.put(None)
     Q.join()
     while not Q.empty():
@@ -331,7 +351,7 @@ def variant_inverter(ev_list, idir, samkeys):
         result = R.get()
         if result is not None:
             homreads[str(result[0])].extend(result[1])
-    for k, v in homreads.iteritems():
+    for k, v in homreads.items():
         fileout = os.path.join(workdir, k + '_event_reads_unsrt.sam')
         samwriter(fileout, baminput, v, k)
 
@@ -341,7 +361,7 @@ def morphological_job_splitter(mainbam, cfiles):
     if type(cfiles) is not list:
         cfiles = cfiles.split()
     variantregions = {os.path.join(workdir, k): [] for k in cfiles}
-    for k in variantregions.keys():
+    for k in list(variantregions.keys()):
         for line in open(k, 'r').readlines():
             if line != '':
                 int_chr = line.split()[0]
@@ -356,10 +376,16 @@ def morphological_job_splitter(mainbam, cfiles):
                         elgth = (len(ref_base) - 1)
                 truelength = (elgth + int(int_start))
                 region = str(int_chr) + ':' + str(int_start) + '-' + str(truelength)
-                variantregions[str(k)].append(str(int_chr + '\t' + int_start + '\t' + str(truelength)))
+                if eventbait[1] < 0:
+                    kind = 'I'
+                elif eventbait[1] > 0:
+                    kind = 'D'
+                else:
+                    kind = 'S'
+                variantregions[str(k)].append(str(int_chr + '\t' + int_start + '\t' + str(truelength) + '\t' + kind))
     jobojects = []
     if any(variantregions.values()) is True:
-        for cnvk, cnvv in variantregions.iteritems():
+        for cnvk, cnvv in variantregions.items():
             fpath, samp = os.path.split(cnvk)
             tmpbed = os.path.join(workdir, samp[:-7] + '.bed')
             with open(tmpbed, 'w') as f:
@@ -368,16 +394,16 @@ def morphological_job_splitter(mainbam, cfiles):
                     jobline = [os.path.join(workdir, samp[:-7]) + '_' + str(chrstr) + '_eventregions.bam',
                                os.path.join(workdir, samp[:-7]) + '_' + str(chrstr) + '_noevents.bam', mainbam, tmpbed,
                                str(chrstr)]
-                    if jobline[1:] not in map(lambda x: x[1:], jobojects):
+                    if jobline[1:] not in [x[1:] for x in jobojects]:
                         jobojects.append(jobline)
                     f.write(coords + '\n')
             log.debug('[morphological_job_splitter] - Coordinate bed file generation, for sample %s...' % samp)
-    chromosmes = map(str, range(1, 23))
+    chromosmes = list(map(str, list(range(1, 23))))
     if chromextformat == True:
-        chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
-    for kfile, v in variantregions.iteritems():
+        chromosmes = ['chr' + str(x) for x in chromosmes]
+    for kfile, v in variantregions.items():
         fpath, samplename = os.path.split(kfile)
-        uniquechrs = [e for e in chromosmes if e not in (map(lambda x: str(x.split('\t')[0]), v))]
+        uniquechrs = [e for e in chromosmes if e not in ([str(x.split('\t')[0]) for x in v])]
         for c in uniquechrs:
             jobojects.append([os.path.join(workdir, samplename[:-7]) + '_' + str(c) + '.bam', mainbam, str(c)])
     shuffle(jobojects)
@@ -391,12 +417,12 @@ def morphological_editor(rem_files, analysisdir, labelvec):
     R = multiprocessing.Queue()
     jl = morphological_job_splitter(baminput, rem_files)
     consumers = [Consumer(Q, R)
-                 for ix in xrange(th)]
+                 for ix in range(th)]
     for w in consumers:
         w.start()
     for j in jl:
         Q.put(subsamp(j))
-    for ix in xrange(th):
+    for ix in range(th):
         Q.put(None)
     Q.join()
     while not Q.empty():
@@ -412,7 +438,7 @@ def merger(bampath, samkeys, lastsamp):
     log.info('Subclone finalization...')
     if not os.path.exists(out_dir):
         os.makedirs(os.path.join(workdir, out_dir))
-    for l in map(lambda x: x[:-7], samkeys.split()):
+    for l in [x[:-7] for x in samkeys.split()]:
         tempfile = pysam.AlignmentFile(baminput, "rb")
         head = tempfile.text
         rgfile = os.path.join(bampath, (l + '_rg.txt'))
@@ -425,7 +451,7 @@ def merger(bampath, samkeys, lastsamp):
         tempfile.close()
         merginglist = [i for i in os.listdir(bampath) if i.endswith('.bam') and i.startswith(l) and 'eventregions' not in i]
         finalfile = os.path.join(bampath, (l + '.bam'))
-        bam2merge = map(lambda x: os.path.join(bampath, x), merginglist)
+        bam2merge = [os.path.join(bampath, x) for x in merginglist]
         bamsfile = os.path.join(bampath, l + '_to_merge.txt')
         file = open(bamsfile, 'w')
         for line in bam2merge:
@@ -465,8 +491,8 @@ def merger(bampath, samkeys, lastsamp):
         os.remove(l + '.remove')
         os.remove(bamsfile)
         os.remove(rgfile)
-        map(os.remove, bam2rm)
-        map(lambda x:os.remove(x + '.bai'), bam2rm)
+        list(map(os.remove, bam2rm))
+        list(map(lambda x:os.remove(x + '.bai'), bam2rm))
     if len(lastsamp) > 0:    
         try:
             shutil.copyfile(baminput, os.path.join(workdir, out_dir, lastsamp + '.bam'))
@@ -503,7 +529,7 @@ def cnv_gen():
     fh.close()
     Idpattern = '^>[a-zA-Z0-9]+'
     FileId = re.search(Idpattern, subject).group()
-    ids = [prefix + '_C'] + map(lambda x: prefix + '_S' + str(x), range(1, int(sub_numb + 1)))
+    ids = [prefix + '_C'] + [prefix + '_S' + str(x) for x in range(1, int(sub_numb + 1))]
     R_workdir = robjects.Vector(workdir)
     robjects.r.assign("PathIn", R_workdir)
     R_prefix = robjects.Vector(prefix)
@@ -544,22 +570,22 @@ def cnv_gen():
     str(ev_numb), str(ev_size), prefix))
 
 
-def germ_caller():
+def germ_caller(long_reads_f):
     log.info('Creation of variant file for sample %s...' % prefix)
     vcf_fusion_file_label = os.path.join(workdir, prefix + '.vcf')
     if not os.path.isfile(vcf_fusion_file_label) or os.path.getsize(vcf_fusion_file_label) == 0:
         Q = multiprocessing.JoinableQueue()
         R = multiprocessing.Queue()
         consumers = [Consumer(Q, R)
-                     for ix in xrange(th)]
+                     for ix in range(th)]
         for w in consumers:
             w.start()
-        chromosmes = range(1, 23)
+        chromosmes = list(range(1, 23))
         if chromextformat == True:
-            chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
+            chromosmes = ['chr' + str(x) for x in chromosmes]
         for ch in chromosmes:
-            Q.put(var_call(ch))
-        for ix in xrange(th):
+            Q.put(var_call(ch, long_reads_f))
+        for ix in range(th):
             Q.put(None)
         Q.join()
         while not Q.empty():
@@ -601,14 +627,14 @@ def germ_caller():
     return removefiles
 
 
-def Worker(analysisdir):
-    labels = [prefix + '_C'] + map(lambda x: prefix + '_S' + str(x), range(1, int(sub_numb + 1)))
+def Worker(analysisdir, long_reads_flag):
+    labels = [prefix + '_C'] + [prefix + '_S' + str(x) for x in range(1, int(sub_numb + 1))]
     cov_calc(baminput, workdir, prefix)()
-    r_files = germ_caller()
+    r_files = germ_caller(long_reads_flag)
     var_evs = morphological_editor(r_files, workdir, labels)
     if var_evs != []:
         variant_inverter(var_evs, analysisdir, r_files)   
-    lsamp = [x for x in labels if x not in  map(lambda x:x[:-7], r_files.split())]
+    lsamp = list(set(labels).difference([x[:-7] for x in r_files.split()]))
     if len(lsamp) > 0:
         merger(workdir, r_files,  str(lsamp[0]))
     else:
@@ -685,7 +711,7 @@ def alternative_reader(args):
     else:
         bedfile = None
     if args.cnv is not None:
-        cnvfile = map(int, ' '.join(map(str, args.cnv)).split())
+        cnvfile = list(map(int, ' '.join(map(str, args.cnv)).split()))
         if (int(cnvfile[0]) * int(cnvfile[1])) > 500000000:
             log.error('Size of CNV events is too big!')
             sys.exit(1)
@@ -720,6 +746,8 @@ def main_reader(args):
     refcheck()
     ver = args.verbose
     verbosity(ver)
+    long_flag = False
+    l_flag = args.long_reads
     if args.output_dir is not None:
         out_dir = str(args.output_dir[0])
     else:     
@@ -732,6 +760,9 @@ def main_reader(args):
         sys.exit(1)
     sub_numb = int(args.subclone_number[0])
     var_numb = int(args.variants_number[0])
+    if l_flag in ['y', 'yes']:
+        long_flag = True
+        var_numb = sub_numb  
     architecture = args.subclonal_architecture
     th = args.threads
     if args.target is not None:
@@ -739,7 +770,7 @@ def main_reader(args):
     else:
         bedfile = None
     if args.cnv is not None:
-        cnvfile = map(int, ' '.join(map(str, args.cnv)).split())
+        cnvfile = list(map(int, ' '.join(map(str, args.cnv)).split()))
         if (int(cnvfile[0]) * int(cnvfile[1])) > 500000000:
             log.error('Size of CNV events is too big!')
             sys.exit(1)
@@ -749,7 +780,7 @@ def main_reader(args):
     bamchr = chrcheck(baminput)
     if 'chr' in str(bamchr):
         chromextformat = True
-    Worker(workdir)
+    Worker(workdir, long_flag)
 
 
 def verbosity(ver):
@@ -805,9 +836,9 @@ g.add_argument('-la', '--label', action='store', metavar='',
                nargs=1, help=argparse.SUPPRESS)
 g.add_argument('-r', '--reference', action='store', metavar='',
                nargs=1, help=argparse.SUPPRESS)
-g.add_argument('-scn', '--subclone_number', action='store', metavar='', choices=xrange(1, 6),
+g.add_argument('-scn', '--subclone_number', action='store', metavar='', choices=range(1, 6),
                nargs=1, type=int, default=1, help=argparse.SUPPRESS)
-g.add_argument('-vn', '--variants_number', action="store", type=int, choices=xrange(1, 1000),
+g.add_argument('-vn', '--variants_number', action="store", type=int, choices=range(1, 1001),
                nargs=1, metavar='', default=1, help=argparse.SUPPRESS)
 g.add_argument('-sa', '--subclonal_architecture', action="store", choices=['linear', 'branched'],
                nargs=1, metavar='', default='linear', help=argparse.SUPPRESS)
@@ -817,7 +848,8 @@ g1 = parser.add_argument_group(title='    alternative usage',
 g.add_argument('-l', '--list', action='store', metavar='',
                nargs=1, help=argparse.SUPPRESS)
 f = parser.add_argument_group(title='    options',
-                              description='''    -cnv, --cnv                    generates a CNV file containing random del/dup events [#Events EventSize]
+                              description='''    -lr,  --long_reads             switch to long-reads mode (CNV only - disable small variant editing [-vn])
+    -cnv, --cnv                    generates a CNV file containing random del/dup events [#Events EventSize]
     -b,   --target                 target file in .bed format (not required)
     -o,   --output_dir             if omitted, generates a results directory in the current position
     -t,   --threads_number         number of processing threads [1]
@@ -825,6 +857,8 @@ f = parser.add_argument_group(title='    options',
                                    on terminal. No number means info. Default is no verbosity       
     -h,   --help                   show this help message and exit
 ''')
+f.add_argument('-lr', '--long_reads', action='store', metavar='', default=['n'],
+               help=argparse.SUPPRESS, choices=['y', 'n', 'yes', 'no'])
 f.add_argument('-cnv', '--cnv', action='store', metavar='', type=int,
                nargs=2, help=argparse.SUPPRESS)
 f.add_argument('-b', '--target', action='store', metavar='',
@@ -834,7 +868,7 @@ f.add_argument('-o', '--output_dir', action="store", nargs=1, metavar='',
 f.add_argument('-t', '--threads', action="store", type=int, default=1, metavar='',
                help=argparse.SUPPRESS)
 f.add_argument('-vb', '--verbose', const=1, default=1, type=int, nargs="?",
-               help=argparse.SUPPRESS, choices=range(0, 4))
+               help=argparse.SUPPRESS, choices=list(range(0, 4)))
 f.add_argument('-h', '--help', action="help",
                help=argparse.SUPPRESS)
 try:
