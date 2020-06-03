@@ -1,10 +1,10 @@
 from setuptools import setup
 import sys
 
-req = ['biopython==1.70', 'Cython==0.24', 'pysam==0.13', 'rpy2>=2.7.0']
+req = ['biopython==1.70', 'Cython==0.24', 'pysam==0.13', 'rpy2>=2.7.0,<=2.8.6']
 
 if int(sys.version.split()[0][0]) > 2:
-    req = ['biopython>=1.70', 'Cython>=0.24', 'pysam>=0.13', 'rpy2>=2.7.0']
+    req = ['biopython>=1.70', 'Cython>=0.24', 'pysam>=0.13', 'rpy2>=2.7.0,<=2.8.6']
 
 setup(name='Xome_Blender',
       version='0.1',
