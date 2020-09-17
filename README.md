@@ -3,21 +3,6 @@ Xome-Blender is a collection of python and R scripts based on SAMtools functions
 The second module generates the synthetic heterogeneous sample.
 ###### Supported on Linux.
 
-## Requirements
-* Python 2.7 (https://www.python.org/downloads/)
-* R (https://www.r-project.org)
-* SAMtools and BCFtools 1.6 or above (http://www.htslib.org/download/)
-
-## Installation
-
-* ### Clone the Xome-Blender repository
-    
-        git clone git://github.com/rsemeraro/Xome-Blender.git
-* ### Compile
-    The project can be compiled by calling setup.py in the top-level directory:    
-
-        python setup.py install
-
 ## Usage
 First run InXalizer. It requires a BAM file, a label for it and a reference genome. By means of four parameters it is possible to tune the initialization process: 
  1. Subclone number = the number of subclones that will compose the final product (```-scn```).
@@ -30,19 +15,19 @@ Optionally, it is possible to use a target file, in bed format, to edit only def
 Examples:
 * Running InXalizer with minimum requirements:
 
-        python inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched
+        python3 inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched
         
 * Running InXalizer with target file:
 
-        python inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -b MyTargetfile.bed
+        python3 inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -b MyTargetfile.bed
 
 * Running InXalizer with CNVs:
 
-        python inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -cnv 3 1000000
+        python3 inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -cnv 3 1000000
 
 InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-l```, and a reference sequence.
 
-        python inxalizer -r ref.fa -l cnv_list.txt
+        python3 inxalizer -r ref.fa -l cnv_list.txt
         
 Each line of the ```cnv_list``` file must contain a label for the cnv file to be generated, the number and the size of CNV events and, optionally, the path to a target file.
   ##### List_file example:
@@ -55,15 +40,15 @@ The main module takes as input the BAM files produced by InXalizer, the sample's
 Examples:
 * Running Xome-Blender with minimum requirements:
 
-        python xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf
+        python3 xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf
 * Running Xome-Blender with CNVs:
 
-        python xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf -cnv my_label_CNV.txt
+        python3 xome_blender -i Control.bam Subclone1.bam Subclone2.bam -la my_label -sc 127 -p 30 40 30 -fc 110 -v Subclone1.vcf Subclone2.vcf -cnv my_label_CNV.txt
     ######  \*Multiple elements must be space separated. <br />
   
 Alternatively, it can be run in *_"automated mode"_* by using the ```--list (-l)``` option. The activation of this parameter requires a list file, containing the info to run multiple consecutive analyses.
 
-      python xome_blender -l list_file.txt
+      python3 xome_blender -l list_file.txt
    The list_file is a tab separated file containing different anlayses (one per line). Each row must contain all the parameters above.
   ##### List_file example:
       NA18501_Control.bam NA18501_Subclone1.bam	NA18501	145	20 80   120 Subclone1.vcf

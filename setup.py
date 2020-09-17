@@ -4,7 +4,7 @@ import sys
 req = ['biopython==1.70', 'Cython==0.24', 'pysam==0.13', 'rpy2>=2.7.0,<=2.8.6']
 
 if int(sys.version.split()[0][0]) > 2:
-    req = ['biopython>=1.70', 'Cython>=0.24', 'pysam>=0.13', 'rpy2>=2.7.0,<=2.8.6']
+    req = ['biopython>=1.70', 'Cython>=0.24', "pysam@https://github.com/pysam-developers/pysam/tarball/master#egg=pysam", 'rpy2>=2.7.0']
 
 setup(name='Xome_Blender',
       version='0.1',

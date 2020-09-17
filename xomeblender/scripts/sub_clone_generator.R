@@ -270,7 +270,7 @@ if (Model=="branched")
     write(paste(Label,"_S3.remove",sep=""), stdout())
     FileVCFVariants3<-file.path(Path2VCF,paste(Label,"_S3",".variants",sep=""))
     FileVCF2Remove4<-file.path(Path2VCF,paste(Label,"_S4",".remove",sep=""))
-    write(paste(Label,"_S.remove",sep=""), stdout())
+    write(paste(Label,"_S4.remove",sep=""), stdout())
     FileVCFVariants4<-file.path(Path2VCF,paste(Label,"_S4",".variants",sep=""))
     
     

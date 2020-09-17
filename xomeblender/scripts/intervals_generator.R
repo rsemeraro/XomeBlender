@@ -193,9 +193,23 @@ if(EventsNumb==2)
   DelDupVec <- sample(c("Dup","Del"),EventsNumb,replace=TRUE)
 }
 
+copyn <- c()
+
+for(i in DelDupVec)
+{
+    if(i=='Del')
+    {
+        x <- sample.int(2, 1)
+        copyn <- c(copyn, x)     
+    }else{
+        x <- sample.int(5, 1)
+        copyn <- c(copyn, x)   
+    }
+}
+
 RefVec <- rep(Ref, length(Chrs))
 
-ChrIntervals <- cbind(ChrIntervals, DelDupVec, SampCol, RefVec)
+ChrIntervals <- cbind(ChrIntervals, DelDupVec, copyn, SampCol, RefVec)
 TabOut <- file.path(PathIn, paste(Label, "_CNV.txt", sep=""))
 write.table(ChrIntervals, file=TabOut, sep = "\t", col.names = FALSE, quote = FALSE, row.names = FALSE)
 

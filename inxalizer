@@ -14,6 +14,7 @@ import pysam
 import rpy2.robjects as robjects
 from xomeblender.logging_module_X import log
 
+
 class Consumer(multiprocessing.Process):
     def __init__(self, task_queue, result_queue, main='.'):
         multiprocessing.Process.__init__(self)
@@ -155,7 +156,7 @@ class few_proc_worker(cov_calc):
                 break
         baminputopen.close()
         out_val = 0
-        if n is not 0 and m is not 0:
+        if n != 0 and m != 0:
             out_val = int(round(float(n) / float(m)))
         return out_val
 
@@ -188,7 +189,7 @@ class few_proc_worker_bed(cov_calc):
                 break
         baminputopen.close()
         out_val = 0
-        if n is not 0 and m is not 0:
+        if n != 0 and m != 0:
             out_val = int(round(float(n) / float(m)))
         return out_val
 
@@ -256,7 +257,10 @@ class read_inverter(object):
         for read in bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1].split('-')[0])),
                                   int(str(region.split(':')[1].split('-')[1])) + 1):
             if read.query_sequence is not None:
-                aligned_positions = read.get_aligned_pairs(with_seq=True)
+                try:
+                    aligned_positions = read.get_aligned_pairs(with_seq=True)
+                except:
+                    log.debug("[read_inverter] - MD tag is missing for read %s " % (read.query_name))
             else:
                 log.warning("[read_inverter] - no sequence for read %s " % (read.query_name))
                 continue    
@@ -264,10 +268,10 @@ class read_inverter(object):
             Ins_flag = False
             if pos in list(zip(*aligned_positions))[1]:
                 try:
-                    idx = list(zip(*aligned_positions)[1]).index(pos)
+                    idx = list(zip(*aligned_positions))[1].index(pos)
                     cigarLine=read.cigar
                     if len(cigarLine) > 1:
-                        listcigar = zip(*cigarLine)[0]
+                        listcigar = list(zip(*cigarLine))[0]
                         if 2 in listcigar and ev_kind == 'D':
                             idx=idx+1
                         elif 1 in listcigar and ev_kind == 'I':
@@ -333,7 +337,6 @@ def variant_inverter(ev_list, idir, samkeys):
                  for ix in range(th)]
     for w in consumers:
         w.start()
-
     for e in ev_list:
         sampname = '_'.join(e.split('_')[:-2])
         int_chr = os.path.split(e)[1].replace('_eventregions.bam','').split('_')[-1]
@@ -347,13 +350,16 @@ def variant_inverter(ev_list, idir, samkeys):
     Q.join()
     while not Q.empty():
         Q.get()
+    log.debug('[variant_inverter] - collecting results!')   
     for r in range(R.qsize()):
         result = R.get()
         if result is not None:
             homreads[str(result[0])].extend(result[1])
+    log.debug('[variant_inverter] - finished!')            
     for k, v in homreads.items():
         fileout = os.path.join(workdir, k + '_event_reads_unsrt.sam')
         samwriter(fileout, baminput, v, k)
+   
 
 
 def morphological_job_splitter(mainbam, cfiles):
@@ -398,7 +404,7 @@ def morphological_job_splitter(mainbam, cfiles):
                         jobojects.append(jobline)
                     f.write(coords + '\n')
             log.debug('[morphological_job_splitter] - Coordinate bed file generation, for sample %s...' % samp)
-    chromosmes = list(map(str, list(range(1, 23))))
+    chromosmes = list(map(str, list(range(1, 23)))) + ['X', 'Y']
     if chromextformat == True:
         chromosmes = ['chr' + str(x) for x in chromosmes]
     for kfile, v in variantregions.items():
@@ -524,33 +530,33 @@ def cnv_gen():
     ev_numb, ev_size = cnvfile
     log.info('Starting creation of CNV file containing %s events of %s bp, for sample %s' % (
         str(ev_numb), str(ev_size), prefix))
-    fh = file(ref, 'r')
+    fh = open(ref, 'r')
     subject = fh.read(100000000)
     fh.close()
     Idpattern = '^>[a-zA-Z0-9]+'
     FileId = re.search(Idpattern, subject).group()
     ids = [prefix + '_C'] + [prefix + '_S' + str(x) for x in range(1, int(sub_numb + 1))]
-    R_workdir = robjects.Vector(workdir)
+    R_workdir = robjects.StrVector([workdir])
     robjects.r.assign("PathIn", R_workdir)
-    R_prefix = robjects.Vector(prefix)
+    R_prefix = robjects.StrVector([prefix])
     robjects.r.assign("Label", R_prefix)
-    R_event_size = robjects.Vector(ev_size)
+    R_event_size = robjects.IntVector([ev_size])
     robjects.r.assign("EventSize", R_event_size)
-    R_ev_numb = robjects.Vector(ev_numb)
+    R_ev_numb = robjects.IntVector([ev_numb])
     robjects.r.assign("EventsNumb", R_ev_numb)
-    R_chstyle = robjects.Vector(FileId[1:])
+    R_chstyle = robjects.StrVector([FileId[1:]])
     robjects.r.assign("ChrStyle", R_chstyle)
-    R_filesfolder = robjects.Vector(filesfolder)
+    R_filesfolder = robjects.StrVector([filesfolder])
     robjects.r.assign("FilesFolder", R_filesfolder)
-    R_ids = robjects.Vector(ids)
+    R_ids = robjects.StrVector(ids)
     robjects.r.assign("IDs", R_ids)
-    R_ref = robjects.Vector(ref)
+    R_ref = robjects.StrVector([ref])
     robjects.r.assign("Ref", R_ref)
     if bedfile is not None:
-        R_bedfile = robjects.Vector(bedfile)
+        R_bedfile = robjects.StrVector([bedfile])
         robjects.r.assign("Bed", R_bedfile)
     else:
-        R_bedfile = robjects.Vector('')
+        R_bedfile = robjects.StrVector([''])
         robjects.r.assign("Bed", R_bedfile)
     RDataFile = os.path.join(workdir, ("." + prefix + '.cnv.tmp.RData'))
     robjects.r(
@@ -580,7 +586,7 @@ def germ_caller(long_reads_f):
                      for ix in range(th)]
         for w in consumers:
             w.start()
-        chromosmes = list(range(1, 23))
+        chromosmes = list(range(1, 23))# + ['X','Y']
         if chromextformat == True:
             chromosmes = ['chr' + str(x) for x in chromosmes]
         for ch in chromosmes:
@@ -604,24 +610,24 @@ def germ_caller(long_reads_f):
                             vcf_fusion_file.write(ls)
         for f in vcffiles:
             os.remove(os.path.join(workdir, f))
-    R_vcf_fusion_file_label = robjects.Vector(vcf_fusion_file_label)
+    R_vcf_fusion_file_label = robjects.StrVector([vcf_fusion_file_label])
     robjects.r.assign("FileVCFIn", R_vcf_fusion_file_label)
-    R_prefix = robjects.Vector(prefix)
+    R_prefix = robjects.StrVector([prefix])
     robjects.r.assign("Label", R_prefix)
-    R_architecture = robjects.Vector(architecture)
+    R_architecture = robjects.StrVector(architecture)
     robjects.r.assign("Model", R_architecture)
-    R_var_numb = robjects.Vector(var_numb)
+    R_var_numb = robjects.IntVector([var_numb])
     robjects.r.assign("TotalMutation", R_var_numb)
-    R_sub_numb = robjects.Vector(sub_numb)
+    R_sub_numb = robjects.IntVector([sub_numb])
     robjects.r.assign("NClone", R_sub_numb)
-    R_workdir = robjects.Vector(workdir)
+    R_workdir = robjects.StrVector([workdir])
     robjects.r.assign("Path2VCF", R_workdir)
     RDataFile = os.path.join(workdir, ("." + prefix + '.tmp.RData'))
     robjects.r(
         "save(FileVCFIn, Label, Model, TotalMutation, NClone, Path2VCF, file='" + RDataFile + "', compress=TRUE)")
     scg = os.path.join(filesfolder, 'xomeblender/scripts', 'sub_clone_generator.R')
     RR = Popen(['Rscript', scg, RDataFile], stdout=PIPE)
-    removefiles = RR.communicate()[0]
+    removefiles = RR.communicate()[0].decode("utf-8")
     log.debug('[germ_caller] - remove files generated: %s' % removefiles.replace('\n', ' '))
     os.remove(RDataFile)
     return removefiles
@@ -721,11 +727,23 @@ def alternative_reader(args):
         sys.exit(1)
 
        
-def refcheck():
-    for r in ['samtools', 'bcftools']:
-        tv = float(check_output([r, '--version']).split()[1])
-        if tv < 1.6:
-            log.error('The version of %s must be 1.6 or above.' % r)
+def refcheck(): 
+    for r in ['samtools', 'bcftools']: 
+        min_v = 1.6 
+        vers = check_output([r, '--version']).split()[1].decode('utf-8') 
+        if '.' in vers: 
+            maj,min_ = str(vers).split('.')[:2] 
+            maj_ref,min_ref = str(min_v).split('.') 
+            if int(maj) < int(maj_ref): 
+                log.error('The version of %s must be 1.6 or above.' % r) 
+            else: 
+                if int(min_) < int(min_ref): 
+                    log.error('The version of %s must be 1.6 or above.' % r)
+        else:
+            maj = vers
+            maj_ref = str(min_v).split('.')[0]
+            if int(maj) < int(maj_ref): 
+                log.error('The version of %s must be 1.6 or above.' % r)
 
 def main_reader(args):
     global filesfolder

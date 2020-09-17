@@ -42,6 +42,17 @@ class subsamp(object):
                 log.debug('[subsamp] - samtools view -hb -s %s -o %s %s -U %s -L %s %s' % (seed, outputfile, sampfile, nodelfile, tmpbed, chrome))
                 samplingline = Popen(['samtools', 'view', '-hb', '-s', seed, sampfile, chrome], stdout=PIPE)
                 splittingline = Popen(['samtools', 'view', '-hb', '-o', outputfile, '-', '-U', nodelfile, '-L', tmpbed], stdin=samplingline.stdout, stdout=PIPE).wait()
+                doubledel = os.popen("awk '{if ($4=='2') print $0}' " + tmpbed).read()
+                if doubledel != '':
+                    singledel = os.popen("awk '{if ($4=='1') print $0}' " + tmpbed).read()
+                    if singledel != '':
+                        single_del_path = tmpbed.replace('_del.bed', '_double_del.bed')
+                        with open(single_del_path, 'w') as file:
+                            file.write(singledel)
+                        outputfile2 = outputfile[:-4] + '_2.bam'
+                        splittingline = Popen(['samtools', 'view', '-hb', '-o', outputfile2, outputfile, '-L', single_del_path], stdout=PIPE).wait()   
+                        os.remove(outputfile)
+                        os.rename(outputfile2, outputfile)
                 log.debug('[subsamp] - samtools index %s' % outputfile)
                 pysam.index(outputfile, catch_stdout=False)
                 log.debug('[subsamp] - samtools index %s' % nodelfile)
@@ -62,21 +73,20 @@ class add_intervals(object):
         self.samregline = samregline
         self.variant_files = variant_files
         self.wdir = wdir
-
+   
     def __call__(self):
         import random
-        inputfile, region, samplename, ev_type = self.samregline
-        log.debug('[add_intervals] - Creation of %s in position %s for sample %s...' % (ev_type, region, inputfile))
+        inputfile, region, samplename, ev_type, copnum = self.samregline
+        log.debug('[add_intervals] - Creation of %s in position %s for sample %s...' % (ev_type, region, inputfile)) # Extract reads for duplications
         if type(self.variant_files) == str:
             self.variant_files = [self.variant_files]
-        varfile = os.path.join(str(self.wdir), filter(lambda x: samplename in x, self.variant_files)[
-            0])
+        varfile = os.path.join(str(self.wdir), list(filter(lambda x: samplename in x, self.variant_files))[0])
         if not os.path.isfile(inputfile + '.bai'):
             pysam.index(inputfile, catch_stdout=False)
         bamfile = pysam.AlignmentFile(inputfile, "rb")
         vcf_in = pysam.VariantFile(varfile)
         BamRegion = bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1]).split('-')[0]),
-                                  int(str(region.split(':')[1]).split('-')[1]))
+                                  int(str(region.split(':')[1]).split('-')[1])) # Open vcf variant file
         etheroreads = []
         homoreads = []
         countpos = 0
@@ -85,9 +95,10 @@ class add_intervals(object):
                                     int(str(region.split(':')[1]).split('-')[1])):
                 countpos += 1
         except Exception:
+            log.debug('[add_intervals] - No somatic events found in region %s' % (region))
             pass
         if countpos > 0:
-            log.debug('[add_intervals] - Iterating over variants in region %s of file %s' % (region, varfile))
+            log.debug('[add_intervals] - Iterating over variants in region %s of file %s' % (region, varfile)) # If reads fall onto small event in region
             for rec in vcf_in.fetch(str(region.split(':')[0]), int(str(region.split(':')[1]).split('-')[0]),
                                     int(str(region.split(':')[1]).split('-')[1])):
                 for read in bamfile.fetch(str(region.split(':')[0]), int(str(rec).split()[1]),
@@ -96,7 +107,7 @@ class add_intervals(object):
                         aligned_positions = read.get_aligned_pairs(with_seq=True)
                         pos = int(str(rec).split()[1]) - 1
                         if pos in zip(*aligned_positions)[1]:
-                            idx = list(zip(*aligned_positions)[1]).index(pos)
+                            idx = list(zip(*aligned_positions))[1].index(pos)
                             read_pos, reference_pos, base = aligned_positions[idx]
                             if base is not None and base in "acgt":
                                 etheroreads.append(read.tostring(bamfile))
@@ -108,26 +119,34 @@ class add_intervals(object):
                         log.warning("[add_intervals] - cannot get infos about reads in position %s for sample %s " % (str(region.split(':')[1]), varfile))  
                         continue       
         else:
-            for read in bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1]).split('-')[0]),
+            for read in bamfile.fetch(str(region.split(':')[0]), int(str(region.split(':')[1]).split('-')[0]), # If no reads fall onto small event in region
                                       int(str(region.split(':')[1]).split('-')[1])):
                 homoreads.append(read.tostring(bamfile))
-        NamesList = map(lambda x: x.split('\t')[0], homoreads) + map(lambda x: x.split('\t')[0], etheroreads)
+            log.debug("[add_intervals] - count pos is equal to %s for region %s" % (str(countpos), region))    
+        NamesList = list(map(lambda x: x.split('\t')[0], homoreads)) + list(map(lambda x: x.split('\t')[0], etheroreads))
         for reads in BamRegion:
             if reads.query_name not in NamesList:
                 homoreads.append(reads.tostring(bamfile))
         bamfile.close()
         vcf_in.close()
-        homoreads50 = map(lambda x: homoreads[x],
-                          random.sample(xrange(len(homoreads)), int(round(len(homoreads) / 2.))))
-        intinfos = [etheroreads, homoreads50]
+        if len(etheroreads) > 5 or ev_type != 'Dup':
+            log.debug("[add_intervals] - taking 0.5 reads for region %s event %s" % (region, ev_type))
+            homoreads50 = list(map(lambda x: homoreads[x],
+                              random.sample(range(len(homoreads)), int(round(len(homoreads) / 2.)))))
+        else:
+            homoreads50 = homoreads
+        if ev_type == 'Dup':
+            intinfos = [etheroreads*int(copnum), homoreads50*int(copnum)]
+        else:
+            intinfos = [etheroreads, homoreads50]   
         log.debug(
             '[add_intervals] - Finished creation of %s in position %s for sample %s! %s ethero reads and %s homo reads found on %s variants!' % (
-            ev_type, region, inputfile, len(etheroreads), len(homoreads50), countpos))
+            ev_type, region, inputfile, len(etheroreads), len(homoreads50), countpos)) # Ethero reads are present only if a somatic snp or del falls in cnv region
         return intinfos
 
 
 def samwriter(file_out, template, ev_reads, outlabel):
-    log.debug('[samwriter] - Event bam generation...')
+    log.debug('[samwriter] - Event bam generation...') # Creates events.bam containing duplicated reads
     tempfile = pysam.AlignmentFile(template, "rb")
     head = tempfile.text
     file = open(file_out, 'w')
@@ -154,33 +173,44 @@ def samwriter(file_out, template, ev_reads, outlabel):
 
 
 def copynumbergen(copyfile, idir):
-    log.info('CNV adding...')
+    log.info('CNV adding...') # Creates reads lists for duplications bam aka events.bam
     ethreads = []
     homreads = []
     Q = multiprocessing.JoinableQueue()
     R = multiprocessing.Queue()
     consumers = [Consumer(Q, R)
-                 for ix in xrange(th)]
+                 for ix in range(th)]
     for w in consumers:
         w.start()
 
     for line in open(copyfile, 'r').readlines():
         if line != '':
-            int_chr, int_start, int_stop, int_type, int_samp, int_ref = line.split()
+            int_chr, int_start, int_stop, int_type, int_cn, int_samp, int_ref = line.split()
             if int_type == 'Del':
-                int_file_vec = map(
-                    lambda n: os.path.join(idir, filter(lambda x: n in x, [f for f in os.listdir(os.path.join(workdir, idir)) if f.endswith('.bam')])[0]),
-                    map(lambda t: t + '_' + int_chr + '_', int_samp.split('-')))
+                if 1 <= int(int_cn) <= 2:
+                    int_file_vec = list(map(lambda n: 
+                        os.path.join(idir, list(filter(lambda x: n in x, [f for f in os.listdir(os.path.join(workdir, idir)) if f.endswith('regions.bam')]))[0]),
+                        list(map(lambda t: t + '_' + int_chr + '_', int_samp.split('-')))
+                        ))
+                else:
+                    log.error('[copynumbergen] - Deletion value must be 1 or 2! It is %s.' % str(int_cn))
+                    sys.exit(1)
             else:
-                int_file_vec = map(
-                    lambda n: os.path.join(idir, filter(lambda x: n in x, [f for f in os.listdir(os.path.join(workdir, idir)) if f.endswith('.bam')])[-1]),
-                    map(lambda t: t + '_' + int_chr + '_', int_samp.split('-')))                                   
+                if 1 <= int(int_cn) <= 5:
+                    int_file_vec = list(map(lambda n: 
+                        os.path.join(idir, list(filter(lambda x: n in x, [f for f in os.listdir(os.path.join(workdir, idir)) if not f.endswith('regions.bam') and f.endswith('.bam')]))[0]),
+                        list(map(lambda t: t + '_' + int_chr + '_', int_samp.split('-')))
+                        ))
+                else:
+                    log.error('[copynumbergen] - Duplication value must be between 1 and 5! It is %s.' % str(int_cn))
+                    sys.exit(1)                                    
             region = str(int_chr) + ':' + str(int_start) + '-' + str(int_stop)
             for ll, i in enumerate(int_file_vec):
-                samregline = [str(i), str(region), str(int_samp.split('-')[ll]), str(int_type)]
+                samregline = [str(i), str(region), str(int_samp.split('-')[ll]), str(int_type), str(int_cn)]
+                log.info(samregline)
                 Q.put(add_intervals(samregline, var_files, workdir))
 
-    for ix in xrange(th):
+    for ix in range(th):
         Q.put(None)
     Q.join()
 
@@ -192,24 +222,23 @@ def copynumbergen(copyfile, idir):
         if result is not None:
             ethreads.extend(result[0])
             homreads.extend(result[1])
-
     retlist = [ethreads, homreads]
     return (retlist)
 
 
 def CNVJobSplitter(filecopynumber, cfiles, idir, snamelist, finalcovlist):
-    delregions = {os.path.join(workdir, idir, k): [] for k in cfiles[1:]}
+    delregions = {os.path.join(workdir, idir, k): [] for k in cfiles[1:]} # Link each event to its relative tumoral sample. keys=sample, values=events
     for line in open(filecopynumber, 'r').readlines():
         if line != '':
-            int_chr, int_start, int_stop, int_type, int_samp, int_ref = line.split()
-            int_file_vec = map(lambda n: os.path.join(idir, filter(lambda x: n in x, cfiles)[0]), int_samp.split('-'))
+            int_chr, int_start, int_stop, int_type, int_copyn, int_samp, int_ref = line.split()
+            int_file_vec = list(map(lambda n: os.path.join(idir, list(filter(lambda x: n in x, cfiles))[0]), int_samp.split('-')))
             region = str(int_chr) + ':' + str(int_start) + '-' + str(int_stop)
             for i in int_file_vec:
                 if str(int_type) == 'Del':
-                    delregions[str(os.path.join(workdir, i))].append(str(int_chr + '\t' + int_start + '\t' + int_stop))
+                    delregions[str(os.path.join(workdir, i))].append(str(int_chr + '\t' + int_start + '\t' + int_stop + '\t' + int_copyn))
     jobojects = []
     if any(delregions.values()) is True:
-        for cnvk, cnvv in delregions.iteritems():
+        for cnvk, cnvv in delregions.items():
             fpath, samp = os.path.split(cnvk)
             ncov = dict(zip(snamelist, finalcovlist)).get(samp[:-4])
             tmpbed = os.path.join(workdir, idir, samp[:-4] + '_' + str(ncov) + '_del.bed')
@@ -223,20 +252,20 @@ def CNVJobSplitter(filecopynumber, cfiles, idir, snamelist, finalcovlist):
                                os.path.join(workdir, idir, samp[:-4]) + '_' + str(chrstr) + '_' + str(
                                    ncov) + '_regions.bam',
                                os.path.join(workdir, idir, samp[:-4]) + '_' + str(chrstr) + '_' + str(
-                                   ncov) + '_nodel.bam', cnvk, tmpbed, str(chrstr)]
+                                   ncov) + '_nodel.bam', cnvk, tmpbed, str(chrstr)] # [Sampling percentage, output name regions, output name nodel, input file, chr] Line to generate affected chr bam for each subsample
                     if jobline[1:] not in map(lambda x: x[1:], jobojects):
                         jobojects.append(jobline)
                     f.write(coords + '\n')
             log.debug('[CNVJobSplitter] - Coordinate bed file generation, for sample %s...' % samp)
 
-    chromosmes = range(1, 23)
+    chromosmes = list(range(1, 23)) + ['X', 'Y']
     if chromextformat == True:
-        chromosmes = map(lambda x: 'chr' + str(x), chromosmes)
-    for kfile, v in delregions.iteritems():
+        chromosmes = list(map(lambda x: 'chr' + str(x), chromosmes))
+    for kfile, v in delregions.items():
         fpath, samplename = os.path.split(kfile)
         if not type(chromosmes[0]) == str:
-            chromosmes = map(str, chromosmes)   
-        uniquechrs = [e for e in chromosmes if e not in (map(lambda x: str(x.split('\t')[0]), v))]
+            chromosmes = list(map(str, chromosmes))  
+        uniquechrs = [e for e in chromosmes if e not in list(map(lambda x: str(x.split('\t')[0]), v))] # No event chromosomes for subsamples
         ncov = dict(zip(snamelist, finalcovlist)).get(samplename[:-4])
         for c in uniquechrs:
             seed = '.' + str(ncov)
@@ -244,7 +273,7 @@ def CNVJobSplitter(filecopynumber, cfiles, idir, snamelist, finalcovlist):
                 seed = '.0' + str(ncov)
             jobojects.append([str(randint(0, 90000)) + seed,
                               os.path.join(workdir, idir, samplename[:-4]) + '_' + str(c) + '_' + str(ncov) + '.bam',
-                              str(kfile), str(c)])
+                              str(kfile), str(c)]) # Line to generate no affected chr bam for each subsample
     for c in chromosmes:
         kfile = cfiles[0]
         ncov = dict(zip(snamelist, finalcovlist)).get(os.path.split(kfile)[1][:-4])
@@ -253,7 +282,7 @@ def CNVJobSplitter(filecopynumber, cfiles, idir, snamelist, finalcovlist):
             seed = '.0' + str(ncov)
         jobojects.append([str(randint(0, 90000)) + seed,
                           os.path.join(workdir, idir, os.path.split(kfile)[1][:-4]) + '_' + str(c) + '_' + str(
-                              ncov) + '.bam', str(kfile), str(c)])
+                              ncov) + '.bam', str(kfile), str(c)]) # Line to generate no affected chr bam for control
     shuffle(jobojects)
     return jobojects
 
@@ -263,7 +292,7 @@ def subsampler(outcovlist, analysisdir, labelvec):
     clonefilelist = []
     Q = multiprocessing.JoinableQueue()
     R = multiprocessing.Queue()
-    chromosmes = range(1, 23)
+    chromosmes = list(range(1, 23)) + ['X', 'Y']
     if cnvfile != '':
         jl = CNVJobSplitter(cnvfile, baminputs, analysisdir, labelvec, outcovlist)
     else:
@@ -281,18 +310,18 @@ def subsampler(outcovlist, analysisdir, labelvec):
             shuffle(jl)
 
     consumers = [Consumer(Q, R)
-                 for ix in xrange(th)]
+                 for ix in range(th)]
     for w in consumers:
         w.start()
 
     for j in jl:
         Q.put(subsamp(j))
-    for ix in xrange(th):
+    for ix in range(th):
         Q.put(None)
     Q.join()
     while not Q.empty():
         Q.get()
-    for r in range(R.qsize()):
+    for r in list(range(R.qsize())):
         res = R.get()
         if res is not None and 'regions' in res:
             clonefilelist.append(res)
@@ -338,7 +367,7 @@ def merger(bampath, outlabel):
 
 
 def Worker(analysisdir, outcovlist, copynvfile):
-    labels = [prefix + '_C'] + map(lambda x: prefix + '_S' + str(x), range(1, len(percentageVec)))
+    labels = [prefix + '_C'] + list(map(lambda x: prefix + '_S' + str(x), range(1, len(percentageVec))))
     outlab = '_'.join([prefix, '_'.join(map(lambda x: x.split(prefix + '_')[1], labels)), '_'.join(map(str, percentageVec))])
     clonefiles = subsampler(outcovlist, analysisdir, labels)
     if copynvfile != '':
@@ -405,7 +434,7 @@ def MainReader(args):
     global invisibledir
     global th
     global chromextformat
-
+    
     workdir = os.getcwd()
     filesfolder = os.path.abspath(os.path.dirname(sys.argv[0]))
     ver = args.verbose
@@ -420,7 +449,7 @@ def MainReader(args):
     if '-' in prefix:
         log.error('Hyphens are not allowed for labels. Please, replace it!')
         sys.exit(1)
-    percentageVec = map(int, ' '.join(map(str, args.percentages)).split())
+    percentageVec = list(map(int, ' '.join(map(str, args.percentages)).split()))
     if sum(map(int, percentageVec)) != 100:
         log.error('The sum of your percentages is not equal to 100, fix it!')
     out_cov = str(args.final_coverage[0])
