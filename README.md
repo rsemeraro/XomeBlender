@@ -2,6 +2,7 @@
 
 * New version for Python3 
 * New CNV engine
+* Long reads support
 
 Xome-Blender is a collection of python and R scripts based on SAMtools functions that allows to generate synthetic cancer genomes with user defined features such as the number of subclones, the number of somatic variants and the presence of CNV, without the addition of any synthetic element. It is composed of two modules: InXalizer and Xome-Blender. The first module is devoted to the blending process initialization. It takes as input a single BAM file, a set of user-defined parameters and returns the coverage of the sample and the input-files for the second module (Xome-Blender). Optionally, it creates a file containing the coordinates to insert CNV in the final product.
 The second module generates the synthetic heterogeneous sample.
