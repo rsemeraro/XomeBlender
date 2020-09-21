@@ -70,11 +70,11 @@ Examples:
         
          For duplications, the maximum copy number is 5, on the other hand, for deletions you can set a single deletion (1) or a double deletion (2).
 
-InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-l```, and a reference sequence.
+    InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-l```, and a reference sequence.
 
-        python3 inxalizer -r ref.fa -l cnv_list.txt
-        
-Each line of the ```cnv_list``` file must contain a label for the cnv file to be generated, the number and the size of CNV events and, optionally, the path to a target file.
+      python3 inxalizer -r ref.fa -l cnv_list.txt
+
+    Each line of the ```cnv_list``` file must contain a label for the cnv file to be generated, the number and the size of CNV events and, optionally, the path to a target file.
   ##### List_file example:
       My_label_1	23 10000000
       My_label_2    3 100000000 path/to/target.bed
