@@ -58,15 +58,15 @@ Examples:
     *    ##### Custom CNV
          With Xome Blender 3.1 you can customize the CNV events. The main function, which creates events basing on the number and the size defined by the user, is preserved but now you can pass to Xome Blender a hand made CNV file. The CNV file is made of 7 fields: chr, start, end, event (Del-Dup), copy number, subclones, reference.
          
-                chr4	64680053	65680053	Del	2	1000_variants_S1	/ext-HD2/GRCh38.fa
-                chr13	55771838	56771838	Del	2	1000_variants_S1	/ext-HD2/GRCh38.fa
-                chr14	64913211	65913211	Dup	2	1000_variants_S1	/ext-HD2/GRCh38.fa
-                chr10	24042890	25042890	Dup	1	1000_variants_S2	/ext-HD2/GRCh38.fa	
-                chr17	8389846	    9389846	    Dup	4	1000_variants_S1-1000_variants_S2	/ext-HD2/GRCh38.fa
-                chr2	100120027	101120027	Del	2	1000_variants_S1-1000_variants_S2	/ext-HD2/GRCh38.fa
-                chr8	139185592	140185592	Del	2	1000_variants_S2	/ext-HD2/GRCh38.fa
-                chr8	128351385	129351385	Del	1	1000_variants_S2	/ext-HD2/GRCh38.fa
-                chr9	119828043	120828043	Dup	2	1000_variants_S2	/ext-HD2/GRCh38.fa
+                chr4    64680053    65680053    Del 2   1000_variants_S1    /ext-HD2/GRCh38.fa
+                chr13   55771838    56771838    Del 2   1000_variants_S1    /ext-HD2/GRCh38.fa
+                chr14   64913211    65913211    Dup 2   1000_variants_S1    /ext-HD2/GRCh38.fa
+                chr10   24042890    25042890    Dup 1   1000_variants_S2    /ext-HD2/GRCh38.fa  
+                chr17   8389846     9389846     Dup 4   1000_variants_S1-1000_variants_S2   /ext-HD2/GRCh38.fa
+                chr2    100120027   101120027   Del 2   1000_variants_S1-1000_variants_S2   /ext-HD2/GRCh38.fa
+                chr8    139185592   140185592   Del 2   1000_variants_S2    /ext-HD2/GRCh38.fa
+                chr8    128351385   129351385   Del 1   1000_variants_S2    /ext-HD2/GRCh38.fa
+                chr9    119828043   120828043   Dup 2   1000_variants_S2    /ext-HD2/GRCh38.fa
 
 InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-l```, and a reference sequence.
 
