@@ -10,7 +10,7 @@ The second module generates the synthetic heterogeneous sample.
 ###### Supported on Linux.
 
 ## Requirements
-* Python 3
+* Python 3 (https://www.python.org/downloads/)
 * R (https://www.r-project.org)
 * SAMtools and BCFtools 1.6 or above (http://www.htslib.org/download/)
 
