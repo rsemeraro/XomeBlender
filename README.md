@@ -67,6 +67,8 @@ Examples:
                 chr8    139185592   140185592   Del 2   1000_variants_S2    /ext-HD2/GRCh38.fa
                 chr8    128351385   129351385   Del 1   1000_variants_S2    /ext-HD2/GRCh38.fa
                 chr9    119828043   120828043   Dup 2   1000_variants_S2    /ext-HD2/GRCh38.fa
+        
+         For duplications, the maximum copy number is 5, on the other hand, for deletions you can set a single deletion (1) or a double deletion (2).
 
 InXalizer can be run to generate CNV files only by using the *"CNV list"*  function, invoked as ```-l```, and a reference sequence.
 
