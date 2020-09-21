@@ -22,7 +22,7 @@ The second module generates the synthetic heterogeneous sample.
 * ### Compile
     The project can be compiled by calling setup.py in the top-level directory:    
 
-        python setup.py install
+        python3 setup.py install
         
 ## Docker image
 
