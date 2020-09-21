@@ -9,6 +9,31 @@ Xome-Blender is a collection of python and R scripts based on SAMtools functions
 The second module generates the synthetic heterogeneous sample.
 ###### Supported on Linux.
 
+## Requirements
+* Python 3
+* R (https://www.r-project.org)
+* SAMtools and BCFtools 1.6 or above (http://www.htslib.org/download/)
+
+## Installation
+
+* ### Clone the Xome-Blender repository
+    
+        git clone git://github.com/rsemeraro/Xome-Blender.git
+* ### Compile
+    The project can be compiled by calling setup.py in the top-level directory:    
+
+        python setup.py install
+        
+## Docker image
+
+* ### Download
+
+        docker pull r08d0ck/xomeblender_docker:3.1
+* ### Run image
+
+       docker run -v /your/input_data/folder:/mnt/mydata -it --name XB3 r08d0ck/xomeblender_docker:3.1
+
+
 ## Usage
 First run InXalizer. It requires a BAM file, a label for it and a reference genome. By means of four parameters it is possible to tune the initialization process: 
  1. Subclone number = the number of subclones that will compose the final product (```-scn```).
