@@ -56,7 +56,7 @@ Examples:
 
         python3 inxalizer -i file.bam -la my_label -r MyRef.fasta -scn 2 -vn 50 -sa Branched -cnv 3 1000000
     *    ##### Custom CNV
-         With Xome Blender 3.1 you can customize the CNV events. The main function, which creates events basing on the number and the size defined by the user, is preserved but now you can pass to Xome Blender a hand made CNV file. The CNV file is made of 7 fields: chr, start, end, event (Del-Dup), copy number, subclones, reference.
+         With Xome Blender 3.1 you can customize the CNV events. The main function of ```InXalizer```, which creates events basing on the number and the size defined by the user, is preserved but now you can pass to ```Xome Blender``` a hand made CNV file. The CNV file is made of 7 fields: chr, start, end, event (Del-Dup), copy number, subclones, reference.
          
                 chr4    64680053    65680053    Del 2   1000_variants_S1    /ext-HD2/GRCh38.fa
                 chr13   55771838    56771838    Del 2   1000_variants_S1    /ext-HD2/GRCh38.fa
